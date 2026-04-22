@@ -1,0 +1,1293 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="theme-color" content="#6366f1" />
+  <title>수학 오답노트</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>" />
+  <script>
+    const _w = console.warn;
+    console.warn = (...a) => {
+      const m = (a[0] || '').toString();
+      if (m.includes('cdn.tailwindcss.com') || m.includes('in-browser Babel')) return;
+      _w.apply(console, a);
+    };
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.9/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { margin: 0; padding: 0; overscroll-behavior: none; }
+    @supports(padding: env(safe-area-inset-bottom)) {
+      nav { padding-bottom: env(safe-area-inset-bottom) !important; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+/* ─── 아이콘 ─── */
+const paths = {
+  home:["M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z","M9 22V12h6v10"],
+  plus:["M12 5v14M5 12h14"],
+  x:["M18 6L6 18M6 6l12 12"],
+  search:["M21 21l-6-6m2-5a7 7 0 1 1-14 0 7 7 0 0 1 14 0"],
+  cam:["M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z","M12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8"],
+  img:["M21 19V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"],
+  del:["M3 6h18","M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"],
+  print:["M6 9V2h12v7","M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"],
+  bm:["M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"],
+  cl:["M15 18l-6-6 6-6"],
+  cr:["M9 18l6-6-6-6"],
+  pen:["M12 20h9","M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"],
+  alert:["M12 9v4M12 17h.01"],
+  chk:["M22 11.08V12a10 10 0 1 1-5.93-9.14","M22 4L12 14.01l-3-3"],
+  rld:["M23 4v6h-6","M1 20v-6h6"],
+  bar:["M18 20V10","M12 20V4","M6 20v-6"],
+  eye:["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"],
+  award:["M12 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14z"],
+  trend:["M23 6l-9.5 9.5-5-5L1 18","M17 6h6v6"],
+  edit:["M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"],
+  file:["M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z","M14 2v6h6"],
+  star:["M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"],
+  cog:["M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"],
+  save:["M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z","M17 21v-8H7v8M7 3v5h8"],
+};
+
+function Ic({ n, sz = 20, cls = "" }) {
+  return (
+    <svg width={sz} height={sz} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={1.75} strokeLinecap="round"
+      strokeLinejoin="round" className={cls}>
+      {(paths[n] || []).map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
+
+/* ─── 유틸 ─── */
+const uid = () => "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+
+/* ─── 이미지 압축 (v2 추가) ─── */
+function compressImage(file, maxWidth = 1200, quality = 0.75) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(img.src);
+      let result = canvas.toDataURL("image/jpeg", quality);
+      // Firestore 1MB 한도 안전장치: base64가 700KB 초과 시 재압축
+      if (result.length > 700000) {
+        result = canvas.toDataURL("image/jpeg", 0.5);
+      }
+      if (result.length > 700000) {
+        // 그래도 크면 해상도도 줄임
+        const c2 = document.createElement("canvas");
+        c2.width = Math.round(w * 0.6); c2.height = Math.round(h * 0.6);
+        c2.getContext("2d").drawImage(canvas, 0, 0, c2.width, c2.height);
+        result = c2.toDataURL("image/jpeg", 0.5);
+      }
+      resolve(result);
+    };
+    img.onerror = () => { URL.revokeObjectURL(img.src); resolve(null); };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/* ─── Firebase config 정리 (v2 버그픽스) ─── */
+/* Firebase 콘솔에서 복사한 JavaScript 객체를 JSON으로 변환 */
+function cleanFirebaseConfig(raw) {
+  let s = raw.trim();
+  // "const firebaseConfig = " 등의 접두어 제거
+  s = s.replace(/^(?:const|let|var)\s+\w+\s*=\s*/, "");
+  // 끝의 세미콜론 제거
+  s = s.replace(/;\s*$/, "");
+  // JavaScript 객체의 키에 따옴표가 없는 경우 추가 (apiKey → "apiKey")
+  s = s.replace(/(\{|,)\s*(\w+)\s*:/g, '$1"$2":');
+  // 작은따옴표를 큰따옴표로
+  s = s.replace(/'/g, '"');
+  // 마지막 쉼표 제거 (trailing comma)
+  s = s.replace(/,\s*([\}])/g, '$1');
+  return s;
+}
+
+/* ─── AI 분석 시스템 프롬프트 (v2 추가) ─── */
+const AI_PROMPT = `당신은 중학교·고등학교 수학 교육 전문가입니다.
+학생이 업로드한 수학 문제 이미지를 분석하고 아래 JSON 형식으로만 응답하세요.
+JSON 외의 텍스트(설명, 마크다운 코드블록 등)는 절대 포함하지 마세요.
+
+{"title":"문제 요약 제목","grade":"학년(중1/중2/중3/고1/고2/고3)","unit":"단원명","difficulty":"하 또는 중 또는 상","tags":["태그"],"problemText":"문제 원문","errorStep":null,"errorAnalysis":null,"solutionSteps":[{"num":1,"title":"단계명","math":"수식","explain":"설명"}],"keyConcepts":["개념"],"keyFormulas":["공식"],"tip":"학습 팁"}
+
+규칙:
+- 풀이가 포함된 이미지면 학생의 오류를 찾아 errorStep(번호)과 errorAnalysis(설명)를 채우세요.
+- 문제만 있으면 올바른 풀이를 작성하고 errorStep/errorAnalysis는 null로 두세요.
+- solutionSteps는 3~6단계로 작성하세요.
+- math 필드에는 수식을 텍스트로 표기하세요 (예: x = (-b ± √(b²-4ac)) / 2a).`;
+
+/* ─── Anthropic API 직접 호출 (v2 추가) ─── */
+async function analyzeWithAI(base64, mimeType) {
+  const apiKey = localStorage.getItem("anthropic_api_key");
+  if (!apiKey) throw new Error("API 키가 설정되지 않았습니다.\n설정 화면에서 입력해주세요.");
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      system: AI_PROMPT,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mimeType || "image/jpeg", data: base64 } },
+          { type: "text", text: "이 수학 문제를 분석해주세요. 풀이가 있다면 틀린 부분을 찾아주세요." },
+        ],
+      }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || "API 호출 실패 (" + res.status + ")");
+  }
+
+  const data = await res.json();
+  const text = data.content.filter((c) => c.type === "text").map((c) => c.text).join("");
+  const clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  return JSON.parse(clean);
+}
+
+/* ─── 데모용 목업 데이터 ─── */
+const MOCK = [
+  {
+    id: "p001", title: "이차방정식 - 근의 공식 적용", grade: "중3", unit: "이차방정식", difficulty: "중",
+    tags: ["근의공식", "판별식"],
+    problemImg: "https://placehold.co/600x400/e0e7ff/4f46e5?text=이차방정식", solutionImg: null,
+    problemText: "x²-5x+6=0을 근의 공식으로 풀어라.",
+    errorStep: 2, errorAnalysis: "판별식 계산 시 b=-5이므로 b²=25인데 -25로 계산했습니다.",
+    solutionSteps: [
+      { num: 1, title: "근의 공식 확인", math: "x = (-b ± √(b²-4ac)) / 2a", explain: "a=1, b=-5, c=6 대입" },
+      { num: 2, title: "판별식 계산", math: "b²-4ac = 25-24 = 1", explain: "(-5)²=25, 4×1×6=24" },
+      { num: 3, title: "근 계산", math: "x = (5±1)/2", explain: "분자에 5±1 대입" },
+      { num: 4, title: "최종 답", math: "x=3 또는 x=2", explain: "두 근 확인" },
+    ],
+    keyConcepts: ["근의 공식", "판별식 D=b²-4ac"],
+    keyFormulas: ["x = (-b ± √(b²-4ac)) / 2a", "판별식 D = b² - 4ac", "D > 0: 서로 다른 두 근", "D = 0: 중근 (하나의 근)", "D < 0: 실수 근 없음"],
+    tip: "b가 음수일 때 b²은 반드시 양수!", notes: "판별식 부호 주의",
+    bookmarked: true, mastered: false, createdAt: Date.now() - 864e5 * 3, reviewCount: 2, lastReviewed: Date.now() - 864e5,
+  },
+  {
+    id: "p002", title: "삼각비 - sin cos tan", grade: "중3", unit: "삼각비", difficulty: "상",
+    tags: ["sin", "cos", "tan"],
+    problemImg: "https://placehold.co/600x400/f0fdf4/16a34a?text=삼각비", solutionImg: null,
+    problemText: "빗변=10, 각=30°일 때 나머지 변", errorStep: null, errorAnalysis: null,
+    solutionSteps: [
+      { num: 1, title: "sin 적용", math: "sin30° = 대변/빗변", explain: "sin30°=0.5" },
+      { num: 2, title: "대변 계산", math: "대변 = 10 × 0.5 = 5", explain: "곱하기" },
+      { num: 3, title: "밑변 계산", math: "밑변 = 10 × cos30°", explain: "cos30° 적용" },
+    ],
+    keyConcepts: ["삼각비 정의", "특수각"],
+    keyFormulas: ["sin A = 대변 / 빗변", "cos A = 밑변 / 빗변", "tan A = 대변 / 밑변", "sin30°=0.5, cos30°≈0.87, tan30°≈0.58"],
+    tip: "30-60-90 삼각형 변의 비: 1:√3:2", notes: "",
+    bookmarked: false, mastered: true, createdAt: Date.now() - 864e5 * 7, reviewCount: 4, lastReviewed: Date.now() - 864e5 * 2,
+  },
+  {
+    id: "p003", title: "연립방정식 - 가감법", grade: "중2", unit: "연립방정식", difficulty: "하",
+    tags: ["가감법"],
+    problemImg: "https://placehold.co/600x400/fdf4ff/9333ea?text=연립방정식", solutionImg: null,
+    problemText: "2x+y=7, x-y=2", errorStep: null, errorAnalysis: null,
+    solutionSteps: [
+      { num: 1, title: "가감법", math: "(2x+y)+(x-y)=9", explain: "두 식 더하기" },
+      { num: 2, title: "x값", math: "3x=9, x=3", explain: "나누기" },
+      { num: 3, title: "y값", math: "y=1", explain: "x=3 대입" },
+    ],
+    keyConcepts: ["가감법", "대입법"],
+    keyFormulas: ["가감법: 두 식을 더하거나 빼서 미지수 소거", "대입법: 한 식에서 미지수를 구해 다른 식에 대입"],
+    tip: "계수가 같으면 가감법이 빠름", notes: "",
+    bookmarked: false, mastered: false, createdAt: Date.now() - 864e5, reviewCount: 0, lastReviewed: null,
+  },
+];
+
+/* ─── TTS 헬퍼 ─── */
+function useVoice() {
+  const [speaking, setSpeaking] = useState(null);
+  const [voices, setVoices] = useState([]);
+
+  useEffect(() => {
+    const loadVoices = () => setVoices(window.speechSynthesis.getVoices());
+    loadVoices();
+    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
+    return () => {
+      window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
+      window.speechSynthesis.cancel();
+    };
+  }, []);
+
+  const speak = useCallback((text, id) => {
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "ko-KR"; u.rate = 0.9;
+    const ko = voices.find((v) => v.lang.startsWith("ko"));
+    if (ko) u.voice = ko;
+    u.onstart = () => setSpeaking(id);
+    u.onend = () => setSpeaking(null);
+    u.onerror = () => setSpeaking(null);
+    window.speechSynthesis.speak(u);
+  }, [voices]);
+
+  const stop = useCallback(() => { window.speechSynthesis.cancel(); setSpeaking(null); }, []);
+  return { speaking, speak, stop };
+}
+
+/* ─── 단계별 풀이 ─── */
+function StepByStep({ steps, errorStep }) {
+  const [shown, setShown] = useState(1);
+  const [showAll, setShowAll] = useState(false);
+  const [voiceOn, setVoiceOn] = useState(false);
+  const { speaking, speak, stop } = useVoice();
+  const vis = showAll ? steps.length : shown;
+
+  const speakStep = useCallback((s) => { speak(s.title + ". " + (s.explain || ""), s.num); }, [speak]);
+
+  useEffect(() => {
+    if (voiceOn && !showAll && shown <= steps.length) {
+      const s = steps[shown - 1];
+      if (s) { const t = setTimeout(() => speakStep(s), 300); return () => clearTimeout(t); }
+    }
+  }, [shown, voiceOn, showAll, steps, speakStep]);
+
+  const handleNext = () => { stop(); setShown((n) => Math.min(n + 1, steps.length)); };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <Ic n="pen" sz={14} cls="text-amber-500" />
+          <span>단계별 풀이 ({vis}/{steps.length})</span>
+        </div>
+        <div className="flex gap-2 items-center flex-wrap">
+          <button onClick={() => { setVoiceOn(!voiceOn); if (voiceOn) stop(); }}
+            className={"text-xs px-3 py-1 rounded-full flex items-center gap-1 transition " + (voiceOn ? "bg-indigo-600 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-700")}>
+            {voiceOn ? "🔊 음성 ON" : "🔇 음성"}
+          </button>
+          <button onClick={() => { setShowAll(!showAll); setShown(showAll ? 1 : steps.length); stop(); }}
+            className="text-xs px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200">
+            {showAll ? "한 단계씩" : "전체 보기"}
+          </button>
+          <button onClick={() => { setShown(1); setShowAll(false); stop(); }}
+            className="text-xs px-3 py-1 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center gap-1">
+            <Ic n="rld" sz={11} /> 처음부터
+          </button>
+        </div>
+      </div>
+      {steps.slice(0, vis).map((s) => {
+        const isE = errorStep && s.num === errorStep;
+        const isSp = speaking === s.num;
+        return (
+          <div key={s.num} className={"p-4 rounded-xl border-2 transition-all duration-300 " + (isE ? "border-red-300 bg-red-50" : isSp ? "border-indigo-400 bg-indigo-50" : "border-slate-200 bg-white")}
+            style={{ animation: "fadeInUp 0.3s ease-out" }}>
+            <div className="flex items-start gap-3">
+              <div className={"w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 " + (isE ? "bg-red-500" : "bg-indigo-600")}>{s.num}</div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="font-semibold text-slate-800">{s.title}</div>
+                  <button onClick={() => isSp ? stop() : speakStep(s)}
+                    className={"p-1.5 rounded-lg text-xs flex-shrink-0 transition " + (isSp ? "bg-indigo-600 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-500")}>
+                    {isSp ? "⏸" : "🔊"}
+                  </button>
+                </div>
+                {s.math && <div className="my-2 px-3 py-2 bg-slate-50 rounded-lg overflow-x-auto text-sm font-mono math-text">{s.math}</div>}
+                {s.explain && <div className="text-sm text-slate-600">{s.explain}</div>}
+                {isE && <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1"><Ic n="alert" sz={12} /> 여기서부터 오류</div>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {!showAll && shown < steps.length && (
+        <button onClick={handleNext}
+          className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 to-indigo-600 text-white font-semibold flex items-center justify-center gap-2 shadow-md active:scale-[0.98] transition-transform">
+          <Ic n="cr" sz={16} /> 다음 단계
+        </button>
+      )}
+      {vis === steps.length && (
+        <div className="text-center py-3 text-emerald-600 font-semibold flex items-center justify-center gap-2">
+          <Ic n="chk" sz={18} /> 풀이 완료!
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── 업로드 (v2: 실제 AI 분석 + 이미지 압축) ─── */
+function UploadView({ onSave, onCancel }) {
+  const [img, setImg] = useState(null);
+  const [imgFile, setImgFile] = useState(null); // v2: File 객체 유지
+  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState("");
+  const [error, setError] = useState(""); // v2: 에러 표시
+  const [title, setTitle] = useState("");
+  const [focused, setFocused] = useState(false);
+  const fileRef = useRef(null);
+  const camRef = useRef(null);
+  const imgUrlRef = useRef(null);
+  const abortRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; abortRef.current = true; if (imgUrlRef.current) URL.revokeObjectURL(imgUrlRef.current); };
+  }, []);
+
+  const setImgSafe = (url) => {
+    if (imgUrlRef.current) URL.revokeObjectURL(imgUrlRef.current);
+    imgUrlRef.current = url;
+    setImg(url);
+    if (!url) setImgFile(null);
+  };
+
+  const handleFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (f) { setImgFile(f); setImgSafe(URL.createObjectURL(f)); }
+    e.target.value = "";
+  };
+
+  const handlePaste = (e) => {
+    const items = Array.from(e.clipboardData.items || []);
+    const found = items.find((i) => i.type.startsWith("image/"));
+    if (!found) return;
+    e.preventDefault();
+    const file = found.getAsFile();
+    if (file) { setImgFile(file); setImgSafe(URL.createObjectURL(file)); }
+  };
+
+  const handleCancel = () => { abortRef.current = true; onCancel(); };
+
+  /* v2: 실제 AI 분석 */
+  const go = async () => {
+    if (!imgFile) return;
+    const apiKey = localStorage.getItem("anthropic_api_key");
+    if (!apiKey) { setError("API 키가 설정되지 않았습니다. ⚙ 설정에서 입력해주세요."); return; }
+
+    abortRef.current = false;
+    setLoading(true);
+    setError("");
+
+    try {
+      // 1) 이미지 압축
+      if (mountedRef.current) setStatus("이미지 압축 중...");
+      const compressed = await compressImage(imgFile, 1200, 0.75);
+      if (abortRef.current || !mountedRef.current) { if (mountedRef.current) { setLoading(false); setStatus(""); } return; }
+      if (!compressed) throw new Error("이미지 처리에 실패했습니다.");
+
+      // 2) base64 추출
+      const base64 = compressed.split(",")[1];
+      const mimeType = "image/jpeg";
+
+      // 3) AI 분석
+      if (mountedRef.current) setStatus("AI가 문제를 분석하고 있습니다...");
+      const result = await analyzeWithAI(base64, mimeType);
+      if (abortRef.current || !mountedRef.current) { if (mountedRef.current) { setLoading(false); setStatus(""); } return; }
+
+      // 4) 문제 객체 생성
+      if (mountedRef.current) setStatus("저장 중...");
+      const problem = {
+        id: uid(),
+        title: title || result.title || "AI 분석 문제",
+        grade: result.grade || "", unit: result.unit || "", difficulty: result.difficulty || "중",
+        tags: result.tags || [],
+        problemImg: compressed, // base64 data URL (영구 저장 가능)
+        solutionImg: null,
+        problemText: result.problemText || "",
+        errorStep: result.errorStep || null, errorAnalysis: result.errorAnalysis || null,
+        solutionSteps: result.solutionSteps || [],
+        keyConcepts: result.keyConcepts || [], keyFormulas: result.keyFormulas || [],
+        tip: result.tip || "", notes: "",
+        bookmarked: false, mastered: false,
+        createdAt: Date.now(), reviewCount: 0, lastReviewed: null,
+      };
+
+      if (mountedRef.current) { setLoading(false); setStatus(""); }
+      onSave(problem);
+      imgUrlRef.current = null;
+    } catch (err) {
+      if (mountedRef.current) { setLoading(false); setStatus(""); setError(err.message || "분석에 실패했습니다."); }
+    }
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto p-4 space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-xl font-bold text-slate-800">새 오답 문제 등록</h2>
+        <button onClick={handleCancel} className="p-2 hover:bg-slate-100 rounded-lg"><Ic n="x" /></button>
+      </div>
+
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 text-sm text-indigo-800">
+        💡 아래 <strong>붙여넣기 칸을 클릭</strong>한 뒤 ⌘V / Ctrl+V
+      </div>
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+        <label className="block text-sm font-semibold text-slate-700 mb-2">제목 (선택)</label>
+        <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+          placeholder="예: 중2 중간고사 5번"
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none" />
+      </div>
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+        <div className="flex items-center gap-2 mb-1">
+          <Ic n="file" sz={16} cls="text-indigo-600" />
+          <h3 className="font-semibold text-slate-800">문제 이미지 <span className="text-red-500">*</span></h3>
+          {img && <span className="ml-auto text-xs text-emerald-600 font-semibold flex items-center gap-1"><Ic n="chk" sz={12} /> 완료</span>}
+        </div>
+        <div className="text-xs text-slate-500 mb-3">💡 풀이가 포함된 사진이면 AI가 자동으로 틀린 부분을 찾아줍니다</div>
+
+        {img ? (
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2.5">
+            <img src={img} alt="문제 이미지" className="w-24 h-24 object-cover rounded-lg border border-slate-200 flex-shrink-0" />
+            <div className="flex-1">
+              <div className="text-xs text-emerald-600 font-semibold flex items-center gap-1"><Ic n="chk" sz={12} /> 이미지 첨부됨</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">교체하려면 X</div>
+            </div>
+            <button onClick={() => setImgSafe(null)} className="p-2 bg-white rounded-full shadow hover:bg-red-50 text-slate-400 flex-shrink-0">
+              <Ic n="x" sz={14} />
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <input ref={camRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+              <button onClick={() => camRef.current && camRef.current.click()}
+                className="py-4 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 hover:bg-indigo-100 flex flex-col items-center gap-1 text-xs text-indigo-600">
+                <Ic n="cam" sz={18} /><span className="font-medium">카메라</span>
+              </button>
+              <button onClick={() => fileRef.current && fileRef.current.click()}
+                className="py-4 rounded-xl border-2 border-dashed border-indigo-300 bg-indigo-50 hover:bg-indigo-100 flex flex-col items-center gap-1 text-xs text-indigo-600">
+                <Ic n="img" sz={18} /><span className="font-medium">사진에서 불러오기</span>
+              </button>
+            </div>
+            <textarea onPaste={handlePaste} onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
+              placeholder={focused ? "지금 Ctrl+V 를 누르세요!" : "여기를 클릭한 뒤 Ctrl+V 붙여넣기"}
+              className={"w-full rounded-xl px-3 py-3.5 text-center text-xs resize-none outline-none cursor-pointer leading-relaxed transition-all duration-200 " +
+                (focused ? "border-2 border-solid border-indigo-600 bg-indigo-100 ring-4 ring-indigo-200 shadow-lg placeholder-indigo-600 text-indigo-700"
+                  : "border-2 border-dashed border-indigo-300 bg-white text-transparent placeholder-indigo-400 hover:border-indigo-400 hover:bg-indigo-50")}
+              style={{ caretColor: "transparent" }} rows={2} onChange={() => {}}
+              onKeyDown={(e) => { if (!(e.metaKey || e.ctrlKey)) e.preventDefault(); }} />
+          </div>
+        )}
+      </div>
+
+      {loading && status && (
+        <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 p-3 rounded-xl text-sm flex items-center justify-between">
+          <div className="flex items-center gap-2"><span className="animate-spin">⟳</span> {status}</div>
+          <button onClick={handleCancel} className="text-xs text-indigo-500 hover:text-indigo-700 font-medium px-2 py-1 rounded hover:bg-indigo-100">취소</button>
+        </div>
+      )}
+
+      {/* v2: 에러 표시 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-xl text-sm flex items-center justify-between">
+          <div className="flex items-center gap-2">⚠️ {error}</div>
+          <button onClick={() => setError("")} className="text-xs text-red-500 px-2 py-1 rounded hover:bg-red-100">닫기</button>
+        </div>
+      )}
+
+      <button onClick={go} disabled={!img || loading}
+        className="w-full py-4 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold shadow-lg disabled:opacity-50 flex items-center justify-center gap-2 text-lg active:scale-[0.98] transition-transform">
+        {loading ? <><span className="animate-spin">⟳</span> AI 분석 중...</> : "✨ AI 분석 시작하기"}
+      </button>
+      {!img && !loading && <p className="text-center text-xs text-slate-400">문제 이미지를 먼저 올려주세요</p>}
+    </div>
+  );
+}
+
+/* ─── 문제 상세 ─── */
+function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
+  const [problem, setProblem] = useState(initP);
+  const [mode, setMode] = useState("view");
+  const [showSol, setShowSol] = useState(false);
+  const [notes, setNotes] = useState(initP.notes || "");
+  const [saved, setSaved] = useState(false);
+  const savedTimerRef = useRef(null);
+
+  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); }, [initP.id]);
+  useEffect(() => { return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); window.speechSynthesis.cancel(); }; }, []);
+
+  const { speaking: speakingErr, speak: speakErr, stop: stopErr } = useVoice();
+  const upd = (u) => { setProblem(u); onUpdate(u); };
+
+  const saveNotes = () => {
+    upd({ ...problem, notes });
+    setSaved(true);
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    savedTimerRef.current = setTimeout(() => setSaved(false), 2000);
+  };
+
+  const [confirmDel, setConfirmDel] = useState(false);
+  useEffect(() => { if (confirmDel) { const t = setTimeout(() => setConfirmDel(false), 3000); return () => clearTimeout(t); } }, [confirmDel]);
+  const handleDelete = () => { if (!confirmDel) { setConfirmDel(true); return; } onDelete(problem.id); };
+
+  return (
+    <div className="max-w-3xl mx-auto p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg flex items-center gap-1 text-slate-700"><Ic n="cl" /> 뒤로</button>
+        <div className="flex gap-1">
+          <button onClick={() => upd({ ...problem, bookmarked: !problem.bookmarked })}
+            className={"p-2 rounded-lg transition-colors " + (problem.bookmarked ? "text-amber-500 bg-amber-50" : "text-slate-400 hover:bg-slate-100")}><Ic n="bm" sz={18} /></button>
+          <button onClick={() => window.print()} className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"><Ic n="print" sz={18} /></button>
+          <button onClick={handleDelete}
+            className={"p-2 rounded-lg transition-colors " + (confirmDel ? "bg-red-500 text-white" : "text-red-500 hover:bg-red-50")}>
+            {confirmDel ? <span className="text-xs font-semibold px-1">확인?</span> : <Ic n="del" sz={18} />}
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <h1 className="text-xl font-bold text-slate-800">{problem.title}</h1>
+          {problem.mastered && <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold flex-shrink-0">✅ 마스터</span>}
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {problem.grade && <span className="px-2 py-1 rounded-full bg-indigo-100 text-indigo-700 font-semibold">{problem.grade}</span>}
+          {problem.unit && <span className="px-2 py-1 rounded-full bg-purple-100 text-purple-700 font-semibold">{problem.unit}</span>}
+          {problem.difficulty && <span className={"px-2 py-1 rounded-full font-semibold " + (problem.difficulty === "상" ? "bg-red-100 text-red-700" : problem.difficulty === "중" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>난이도 {problem.difficulty}</span>}
+          {(problem.tags || []).map((t, i) => <span key={i} className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">#{t}</span>)}
+        </div>
+        {problem.reviewCount > 0 && <div className="mt-3 text-xs text-slate-500">복습 {problem.reviewCount}회{problem.lastReviewed && (" · 마지막: " + new Date(problem.lastReviewed).toLocaleDateString("ko-KR"))}</div>}
+      </div>
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+        <div className="flex items-center gap-2 mb-3"><Ic n="file" sz={15} cls="text-indigo-600" /><span className="font-semibold text-slate-800">문제</span></div>
+        <img src={problem.problemImg} alt="문제 이미지" className="w-full rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
+        {problem.problemText && <p className="mt-3 text-sm text-slate-600 italic">{problem.problemText}</p>}
+      </div>
+
+      {mode === "review" ? (
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-2xl p-5 border-2 border-indigo-200">
+          <div className="text-center mb-4">
+            <div className="text-lg font-bold text-indigo-700 mb-1">🎯 복습 모드</div>
+            <div className="text-sm text-slate-600">스스로 풀어본 후 확인하세요</div>
+          </div>
+          {!showSol ? (
+            <button onClick={() => setShowSol(true)} className="w-full py-3 rounded-xl bg-white border-2 border-indigo-400 text-indigo-700 font-semibold hover:bg-indigo-50 flex items-center justify-center gap-2">
+              <Ic n="eye" sz={16} /> 풀이 확인
+            </button>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={() => { upd({ ...problem, mastered: true }); setMode("view"); }} className="flex-1 py-2 rounded-xl bg-emerald-500 text-white font-semibold text-sm active:scale-[0.98] transition-transform">이해했어요!</button>
+              <button onClick={() => setMode("view")} className="flex-1 py-2 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-[0.98] transition-transform">다시 봐야겠어요</button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <button onClick={() => { upd({ ...problem, reviewCount: (problem.reviewCount || 0) + 1, lastReviewed: Date.now() }); setMode("review"); setShowSol(false); }}
+          className="w-full py-3 rounded-xl bg-white border-2 border-indigo-300 text-indigo-700 font-semibold hover:bg-indigo-50 flex items-center justify-center gap-2">
+          <Ic n="rld" sz={16} /> 복습 모드
+        </button>
+      )}
+
+      {problem.errorAnalysis && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+          <div className="flex items-start gap-2">
+            <Ic n="alert" sz={18} cls="text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-red-800 mb-1">오류 분석{problem.errorStep && (" (" + problem.errorStep + "단계)")}</div>
+                <button onClick={() => speakingErr === "err" ? stopErr() : speakErr("오류 분석. " + problem.errorAnalysis, "err")}
+                  className={"p-1.5 rounded-lg text-xs transition-all " + (speakingErr === "err" ? "bg-red-500 text-white shadow-md animate-pulse" : "bg-slate-100 hover:bg-red-100 text-slate-500 hover:text-red-500")}>
+                  {speakingErr === "err" ? "⏸" : "🔊"}</button>
+              </div>
+              <div className="text-sm text-red-700 leading-relaxed">{problem.errorAnalysis}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {(mode !== "review" || showSol) && problem.solutionSteps && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-3"><Ic n="pen" sz={15} cls="text-emerald-600" /><span className="font-semibold">올바른 풀이</span></div>
+          <StepByStep key={problem.id} steps={problem.solutionSteps} errorStep={problem.errorStep} />
+        </div>
+      )}
+
+      {(problem.keyConcepts || []).length > 0 && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+          <div className="flex items-center gap-2 mb-2"><Ic n="star" sz={15} cls="text-purple-600" /><span className="font-semibold">핵심 개념</span></div>
+          <ul className="space-y-1 text-sm text-slate-700">
+            {problem.keyConcepts.map((c, i) => <li key={i} className="flex items-start gap-2"><span className="text-purple-500">▸</span>{c}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {(problem.keyFormulas || []).length > 0 && (
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 rounded-2xl p-4 shadow-sm border-2 border-indigo-200">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">📐</span>
+            <span className="font-bold text-indigo-800">핵심 공식</span>
+            <span className="text-[10px] px-2 py-0.5 bg-indigo-200 text-indigo-800 rounded-full font-semibold">꼭 암기!</span>
+          </div>
+          <div className="space-y-2">
+            {problem.keyFormulas.map((f, i) => (
+              <div key={i} className="px-4 py-3 bg-white border border-indigo-200 rounded-xl shadow-sm">
+                <div className="font-mono text-sm text-indigo-900 font-semibold text-center leading-relaxed formula-text">{f}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {problem.tip && (
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 rounded-2xl p-4 border border-amber-200 flex items-start gap-2">
+          <div className="text-xl">💡</div>
+          <div>
+            <div className="font-semibold text-amber-900 mb-1 text-sm">선생님의 팁</div>
+            <div className="text-sm text-amber-800">{problem.tip}</div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+        <div className="flex items-center gap-2 mb-2">
+          <Ic n="edit" sz={14} cls="text-slate-600" /><span className="font-semibold">나의 메모</span>
+          {saved && <span className="ml-auto text-xs text-emerald-600 font-semibold flex items-center gap-1 transition-all"><Ic n="chk" sz={12} /> 저장됨!</span>}
+        </div>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+          placeholder="이 문제에 대한 나만의 메모를 적어보세요"
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm mb-2" />
+        <div className="flex gap-2">
+          <button onClick={saveNotes}
+            className={"flex-1 py-2 rounded-lg text-sm font-semibold flex items-center justify-center gap-1 transition-all " + (saved ? "bg-emerald-500 text-white" : "bg-indigo-600 text-white")}>
+            <Ic n={saved ? "chk" : "save"} sz={12} /> {saved ? "저장 완료!" : "저장"}
+          </button>
+          <button onClick={() => setNotes(problem.notes || "")} className="flex-1 py-2 rounded-lg bg-slate-100 text-sm">취소</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── 카드 ─── */
+function Card({ p, onClick }) {
+  const date = new Date(p.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+  return (
+    <button onClick={onClick} className="w-full bg-white rounded-2xl p-3 shadow-sm border border-slate-200 hover:shadow-md hover:border-indigo-300 transition text-left group">
+      <div className="flex gap-3">
+        <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
+          <img src={p.problemImg} alt={p.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-start gap-1">
+            <h3 className="font-semibold text-slate-800 text-sm group-hover:text-indigo-600 line-clamp-2">{p.title}</h3>
+            <span className="flex-shrink-0">{p.bookmarked && "🔖"}{p.mastered && "✅"}</span>
+          </div>
+          <div className="flex flex-wrap gap-1 mt-1.5">
+            {p.grade && <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">{p.grade}</span>}
+            {p.unit && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">{p.unit}</span>}
+          </div>
+          <div className="flex justify-between mt-1.5 text-[11px] text-slate-500">
+            <span>{date}</span>
+            {p.reviewCount > 0 && <span>복습 {p.reviewCount}회</span>}
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+/* ─── 라이브러리 ─── */
+function Library({ problems, onSelect }) {
+  const [q, setQ] = useState("");
+  const [fG, setFG] = useState("all");
+  const [fU, setFU] = useState("all");
+  const [fT, setFT] = useState("all");
+  const [printMode, setPrintMode] = useState(false);
+
+  const grades = useMemo(() => ["all", ...new Set(problems.map((p) => p.grade).filter(Boolean))], [problems]);
+  const units = useMemo(() => ["all", ...new Set(problems.map((p) => p.unit).filter(Boolean))], [problems]);
+  const list = useMemo(() => {
+    return problems.filter((p) => {
+      if (fG !== "all" && p.grade !== fG) return false;
+      if (fU !== "all" && p.unit !== fU) return false;
+      if (fT === "bookmark" && !p.bookmarked) return false;
+      if (fT === "unmastered" && p.mastered) return false;
+      if (fT === "mastered" && !p.mastered) return false;
+      if (q) {
+        const h = [p.title, p.unit, p.problemText, ...(p.tags || [])].join(" ").toLowerCase();
+        if (!h.includes(q.toLowerCase())) return false;
+      }
+      return true;
+    }).sort((a, b) => b.createdAt - a.createdAt);
+  }, [problems, q, fG, fU, fT]);
+
+  useEffect(() => {
+    if (!printMode) return;
+    const timer = setTimeout(() => window.print(), 600);
+    const exit = () => setPrintMode(false);
+    window.addEventListener("afterprint", exit);
+    let iosFb = null;
+    const onFocus = () => { iosFb = setTimeout(exit, 300); };
+    const onVis = () => { if (document.visibilityState === "visible") { iosFb = setTimeout(exit, 300); } };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearTimeout(timer); if (iosFb) clearTimeout(iosFb); window.removeEventListener("afterprint", exit); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVis); };
+  }, [printMode]);
+
+  if (printMode) {
+    return (
+      <div className="max-w-3xl mx-auto p-6 print-area" style={{background:"#fff",color:"#1e293b"}}>
+        <button onClick={() => setPrintMode(false)} className="mb-4 text-sm np flex items-center gap-1 hover:underline" style={{color:"#4f46e5"}}><Ic n="cl" sz={14} /> 돌아가기</button>
+        <div className="text-center mb-8 border-b-2 pb-6">
+          <div className="text-3xl mb-2">📐</div>
+          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>수학 오답노트</h1>
+          <p className="text-sm mt-2" style={{color:"#64748b"}}>{fG !== "all" ? fG : "모든 학년"} · {fU !== "all" ? fU : "모든 단원"} · {list.length}문제 · {new Date().toLocaleDateString("ko-KR")}</p>
+        </div>
+        {list.map((p, idx) => (
+          <div key={p.id} style={{ pageBreakInside: "avoid" }} className="mb-8 border-b pb-6">
+            <h2 className="text-lg font-bold mb-2" style={{color:"#1e293b"}}>{idx + 1}. {p.title}</h2>
+            <div className="flex flex-wrap gap-1 mb-2 text-xs">
+              {p.grade && <span className="px-2 py-0.5 rounded" style={{background:"#e0e7ff",color:"#4f46e5"}}>{p.grade}</span>}
+              {p.unit && <span className="px-2 py-0.5 rounded" style={{background:"#f3e8ff",color:"#7c3aed"}}>{p.unit}</span>}
+              {p.difficulty && <span className="px-2 py-0.5 rounded" style={{background:"#f1f5f9"}}>난이도 {p.difficulty}</span>}
+            </div>
+            <img src={p.problemImg} alt={p.title} className="w-full max-h-72 object-contain border rounded-xl mb-3" onError={(e) => { e.target.style.display="none"; }} />
+            {p.problemText && <p className="text-sm italic mb-2" style={{color:"#475569"}}>{p.problemText}</p>}
+            {p.errorAnalysis && (
+              <div className="p-3 border-2 rounded-xl mb-3 text-sm" style={{borderColor:"#fca5a5",background:"#fef2f2",color:"#991b1b"}}>
+                ⚠ 오류{p.errorStep ? " ("+p.errorStep+"단계)" : ""}: {p.errorAnalysis}
+              </div>
+            )}
+            {p.solutionSteps && p.solutionSteps.map((s) => (
+              <div key={s.num} className={"flex gap-2 mb-2 text-sm" + (p.errorStep === s.num ? " pl-2 border-l-2" : "")} style={p.errorStep === s.num ? {borderColor:"#f87171"} : {}}>
+                <span className="font-bold" style={{color:"#4f46e5"}}>{s.num}.</span>
+                <div><strong>{s.title}</strong>{s.math && <span className="font-mono text-xs ml-1">{s.math}</span>}<div className="text-xs" style={{color:"#64748b"}}>{s.explain}</div></div>
+              </div>
+            ))}
+            {(p.keyFormulas || []).length > 0 && (
+              <div className="mt-2 p-3 rounded-xl" style={{background:"#eef2ff"}}>
+                <div className="font-bold text-sm mb-1" style={{color:"#312e81"}}>📐 핵심 공식</div>
+                {p.keyFormulas.map((f, i) => <div key={i} className="font-mono text-xs" style={{color:"#312e81"}}>{f}</div>)}
+              </div>
+            )}
+            {p.tip && <div className="mt-2 p-2 rounded-lg text-xs" style={{background:"#fffbeb",color:"#92400e"}}>💡 {p.tip}</div>}
+            {p.notes && <div className="mt-2 p-2 rounded-lg text-xs" style={{background:"#f8fafc",color:"#475569"}}>📝 {p.notes}</div>}
+          </div>
+        ))}
+        <div className="text-center text-xs pt-4 np" style={{color:"#94a3b8"}}>총 {list.length}문제 · {new Date().toLocaleDateString("ko-KR")} 출력</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto p-4 space-y-3">
+      <div className="relative">
+        <Ic n="search" sz={16} cls="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <input type="text" value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="제목, 단원, 개념으로 검색..."
+          className="w-full pl-9 pr-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none" />
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+        {[
+          { k: "all", l: "전체", c: problems.length },
+          { k: "bookmark", l: "🔖 북마크", c: problems.filter((p) => p.bookmarked).length },
+          { k: "unmastered", l: "❗ 미마스터", c: problems.filter((p) => !p.mastered).length },
+          { k: "mastered", l: "✅ 마스터", c: problems.filter((p) => p.mastered).length },
+        ].map((f) => (
+          <button key={f.k} onClick={() => setFT(f.k)}
+            className={"px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors " + (fT === f.k ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50")}>
+            {f.l}{f.c > 0 && (" (" + f.c + ")")}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <select value={fG} onChange={(e) => setFG(e.target.value)} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+          {grades.map((g) => <option key={g} value={g}>{g === "all" ? "모든 학년" : g}</option>)}
+        </select>
+        <select value={fU} onChange={(e) => setFU(e.target.value)} className="flex-1 px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm">
+          {units.map((u) => <option key={u} value={u}>{u === "all" ? "모든 단원" : u}</option>)}
+        </select>
+        <button onClick={() => setPrintMode(true)} title="출력"
+          className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 flex-shrink-0">
+          <Ic n="print" sz={16} />
+        </button>
+      </div>
+      {list.length === 0 ? (
+        <div className="text-center py-16 text-slate-400">
+          <div className="text-4xl mb-3">📚</div>
+          <div className="text-sm">{problems.length === 0 ? "아직 등록된 오답이 없어요" : "조건에 맞는 문제가 없어요"}</div>
+        </div>
+      ) : (
+        <div className="space-y-2">{list.map((p) => <Card key={p.id} p={p} onClick={() => onSelect(p)} />)}</div>
+      )}
+    </div>
+  );
+}
+
+/* ─── 통계 ─── */
+function Stats({ problems }) {
+  const byUnit = useMemo(() => {
+    const m = {};
+    problems.forEach((p) => { if (p.unit) m[p.unit] = (m[p.unit] || 0) + 1; });
+    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+  }, [problems]);
+  const tot = problems.length;
+  const mst = problems.filter((p) => p.mastered).length;
+  const rev = problems.reduce((s, p) => s + (p.reviewCount || 0), 0);
+  const mx = Math.max(...byUnit.map(([, c]) => c), 1);
+
+  return (
+    <div className="max-w-3xl mx-auto p-4 space-y-4">
+      <h2 className="text-xl font-bold">📊 학습 현황</h2>
+      <div className="grid grid-cols-2 gap-3">
+        {[["전체 오답", tot, "from-indigo-500 to-indigo-600"], ["마스터", mst, "from-emerald-500 to-emerald-600"],
+          ["총 복습", rev, "from-amber-500 to-amber-600"], ["마스터율", tot > 0 ? Math.round(mst / tot * 100) + "%" : "0%", "from-purple-500 to-purple-600"]
+        ].map(([l, v, g]) => (
+          <div key={l} className={"bg-gradient-to-br " + g + " rounded-2xl p-4 text-white"}>
+            <div className="text-xs opacity-80 mb-1">{l}</div>
+            <div className="text-3xl font-bold">{v}</div>
+          </div>
+        ))}
+      </div>
+      {byUnit.length > 0 && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
+          <div className="font-semibold mb-3">단원별 오답</div>
+          <div className="space-y-2">
+            {byUnit.map(([u, c]) => (
+              <div key={u}>
+                <div className="flex justify-between text-sm mb-1"><span>{u}</span><span className="text-slate-500">{c}개</span></div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-indigo-400 to-indigo-600 rounded-full transition-all duration-500" style={{ width: (c / mx * 100) + "%" }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── 설정 (v2: API 키 + Firebase 설정 입력) ─── */
+function Settings({ onClose, onConfigSaved }) {
+  const [apiKey, setApiKey] = useState(localStorage.getItem("anthropic_api_key") || "");
+  const [fbConfig, setFbConfig] = useState(localStorage.getItem("firebase_config") || "");
+  const [showKey, setShowKey] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [testing, setTesting] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const hasApi = !!localStorage.getItem("anthropic_api_key");
+  const hasFb = !!localStorage.getItem("firebase_config");
+
+  const handleSave = () => {
+    if (apiKey.trim()) localStorage.setItem("anthropic_api_key", apiKey.trim());
+    else localStorage.removeItem("anthropic_api_key");
+    if (fbConfig.trim()) {
+      const cleaned = cleanFirebaseConfig(fbConfig);
+      try { JSON.parse(cleaned); } catch { setTestResult({ ok: false, msg: "❌ Firebase 설정 JSON 형식이 올바르지 않습니다." }); return; }
+      localStorage.setItem("firebase_config", cleaned);
+      if (onConfigSaved) onConfigSaved(cleaned);
+    } else {
+      localStorage.removeItem("firebase_config");
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleTest = async () => {
+    setTesting(true); setTestResult(null);
+    try {
+      const cfg = JSON.parse(cleanFirebaseConfig(fbConfig));
+      if (firebase.apps.length) await firebase.app().delete();
+      firebase.initializeApp(cfg);
+      const db = firebase.firestore();
+      await db.collection("problems").limit(1).get();
+      setTestResult({ ok: true, msg: "✅ Firebase 연결 성공!" });
+    } catch (e) {
+      setTestResult({ ok: false, msg: "❌ 연결 실패: " + e.message });
+    }
+    setTesting(false);
+  };
+
+  const handleReset = () => {
+    if (!confirm("모든 설정을 초기화하시겠습니까?")) return;
+    localStorage.removeItem("anthropic_api_key");
+    localStorage.removeItem("firebase_config");
+    setApiKey(""); setFbConfig(""); setTestResult(null);
+  };
+
+  return (
+    <div className="max-w-xl mx-auto p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <button onClick={onClose} className="p-2 -ml-2"><Ic n="cl" /></button>
+        <h2 className="text-lg font-bold">설정</h2>
+      </div>
+
+      {/* 연결 상태 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 text-sm space-y-2">
+        <div className="font-semibold">연결 상태</div>
+        <div>API: {hasApi ? "✅ 설정됨" : "⏳ 미설정"}</div>
+        <div>Firebase: {hasFb ? "✅ 설정됨" : "⏳ 미설정"}</div>
+      </div>
+
+      {/* API 키 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div>
+          <div className="font-semibold text-sm">Anthropic API 키</div>
+          <div className="text-xs text-slate-500 mt-1">
+            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener" className="text-indigo-600 underline">console.anthropic.com</a>에서 발급
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <input type={showKey ? "text" : "password"} value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)} placeholder="sk-ant-..."
+            className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-indigo-500 outline-none" />
+          <button onClick={() => setShowKey(!showKey)}
+            className="px-3 py-2 bg-slate-100 rounded-lg text-xs font-semibold hover:bg-slate-200 flex-shrink-0">
+            {showKey ? "숨기기" : "보기"}
+          </button>
+        </div>
+      </div>
+
+      {/* Firebase 설정 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div>
+          <div className="font-semibold text-sm">Firebase 설정</div>
+          <div className="text-xs text-slate-500 mt-1">Firebase 콘솔 → 프로젝트 설정 → 내 앱 → firebaseConfig JSON 복사</div>
+        </div>
+        <textarea value={fbConfig} onChange={(e) => setFbConfig(e.target.value)}
+          placeholder='{"apiKey":"AIza...","authDomain":"...firebaseapp.com","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'
+          rows={5}
+          className="w-full px-3 py-2 border border-slate-300 rounded-lg text-xs font-mono focus:ring-2 focus:ring-indigo-500 outline-none" />
+        <button onClick={handleTest} disabled={!fbConfig.trim() || testing}
+          className="w-full py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-semibold disabled:opacity-50 transition-colors">
+          {testing ? "⟳ 테스트 중..." : "🔍 연결 테스트"}
+        </button>
+        {testResult && (
+          <div className={"p-3 rounded-xl text-sm font-medium " + (testResult.ok ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200")}>
+            {testResult.msg}
+          </div>
+        )}
+      </div>
+
+      {/* 저장 */}
+      <button onClick={handleSave}
+        className={"w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-[0.98] " + (saved ? "bg-emerald-500" : "bg-gradient-to-r from-indigo-600 to-purple-600")}>
+        {saved ? "✅ 저장 완료!" : "💾 설정 저장"}
+      </button>
+
+      {saved && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-sm text-emerald-700">
+          ✅ 저장되었습니다. 페이지를 새로고침하면 Firebase 연동이 활성화됩니다.
+        </div>
+      )}
+
+      {/* 초기화 */}
+      <button onClick={handleReset}
+        className="w-full py-2 rounded-xl text-sm text-red-500 hover:bg-red-50 transition-colors">
+        🗑 설정 초기화
+      </button>
+
+      {/* 안내 */}
+      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-sm text-blue-800 space-y-1">
+        <div>💡 API 키와 Firebase 설정은 <strong>이 기기의 브라우저</strong>에만 저장됩니다.</div>
+        <div>📱 아이패드/아이폰 각각에서 설정이 필요합니다.</div>
+        {!hasApi && !hasFb && <div>📋 설정 전에는 데모 데이터가 표시됩니다.</div>}
+      </div>
+    </div>
+  );
+}
+
+/* ─── 앱 (v2: Firebase 동적 초기화 + Firestore CRUD) ─── */
+function App() {
+  const [problems, setProblems] = useState([]);
+  const [view, setView] = useState("library");
+  const [selected, setSelected] = useState(null);
+  const [dark, setDark] = useState(false);
+  const [fsize, setFsize] = useState(0);
+  const [appLoading, setAppLoading] = useState(true);
+  const dbRef = useRef(null); // v2: Firestore 참조
+
+  const go = (v) => { setSelected(null); setView(v); };
+  const fsLabel = ["가", "가+", "가++"][fsize];
+
+  /* v2: Firebase 초기화 + Firestore 데이터 로딩 */
+  const initAndLoad = useCallback(async () => {
+    const raw = localStorage.getItem("firebase_config");
+    if (!raw) {
+      // 설정 없음 → 데모 모드
+      setProblems([...MOCK]);
+      setAppLoading(false);
+      return;
+    }
+    try {
+      const cfg = JSON.parse(raw);
+      if (!firebase.apps.length) firebase.initializeApp(cfg);
+      dbRef.current = firebase.firestore();
+      const snap = await dbRef.current.collection("problems").orderBy("createdAt", "desc").get();
+      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      setProblems(data);
+    } catch (e) {
+      console.error("Firebase init error:", e);
+      setProblems([...MOCK]); // 오류 시 데모 모드
+    }
+    setAppLoading(false);
+  }, []);
+
+  useEffect(() => {
+    initAndLoad();
+    // 첫 실행 시 설정이 없으면 설정 화면으로
+    const hasConfig = localStorage.getItem("firebase_config") || localStorage.getItem("anthropic_api_key");
+    if (!hasConfig) setView("settings");
+  }, [initAndLoad]);
+
+  /* v2: Firestore 저장 콜백들 */
+  const handleNewProblem = async (p) => {
+    if (dbRef.current) {
+      try { await dbRef.current.collection("problems").doc(p.id).set(p); } catch (e) { console.error("Save error:", e); }
+    }
+    setProblems((prev) => [p, ...prev]);
+    setSelected(p);
+    setView("detail");
+  };
+
+  const handleUpdate = async (u) => {
+    if (dbRef.current) {
+      try { await dbRef.current.collection("problems").doc(u.id).set(u); } catch (e) { console.error("Update error:", e); }
+    }
+    setProblems((prev) => prev.map((p) => p.id === u.id ? u : p));
+    setSelected(u);
+  };
+
+  const handleDelete = async (id) => {
+    if (dbRef.current) {
+      try { await dbRef.current.collection("problems").doc(id).delete(); } catch (e) { console.error("Delete error:", e); }
+    }
+    setProblems((prev) => prev.filter((p) => p.id !== id));
+    go("library");
+  };
+
+  const handleReload = async () => {
+    if (dbRef.current) {
+      try {
+        const snap = await dbRef.current.collection("problems").orderBy("createdAt", "desc").get();
+        setProblems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (e) { console.error("Reload error:", e); }
+    } else {
+      setProblems([...MOCK]);
+    }
+    go("library");
+  };
+
+  const handleConfigSaved = async (configStr) => {
+    try {
+      const cfg = JSON.parse(configStr);
+      // 기존 앱이 있으면 삭제 후 재초기화
+      if (firebase.apps.length) {
+        await firebase.app().delete();
+      }
+      firebase.initializeApp(cfg);
+      dbRef.current = firebase.firestore();
+      const snap = await dbRef.current.collection("problems").orderBy("createdAt", "desc").get();
+      setProblems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    } catch (e) { console.error("Config apply error:", e); }
+  };
+
+  if (appLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-3 animate-pulse">📐</div>
+          <div className="text-sm text-slate-500">로딩 중...</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={"min-h-screen bg-slate-50 pb-20 " + (dark ? "dm " : "") + (fsize === 1 ? "fs1" : fsize === 2 ? "fs2" : "")}
+      style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+      <style>{`
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+        .scrollbar-hide::-webkit-scrollbar{display:none}
+        .scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}
+        .fs1{transform:scale(1.15);transform-origin:top center}
+        .fs2{transform:scale(1.3);transform-origin:top center}
+        .dm{background:#0f172a!important;color:#cbd5e1}
+        .dm .bg-slate-50{background:#0f172a!important}
+        .dm .bg-white{background:#1e293b!important}
+        .dm header,.dm nav{background:#0f172a!important;border-color:#1e293b!important}
+        .dm .bg-slate-100{background:#334155!important}
+        .dm [class*="border-slate"]{border-color:#334155!important}
+        .dm [class*="shadow-sm"]{box-shadow:0 0 12px rgba(0,240,255,.08)!important}
+        .dm .text-slate-800{color:#00f0ff!important;text-shadow:0 0 8px rgba(0,240,255,.4)}
+        .dm .text-slate-700{color:#e2e8f0!important}
+        .dm .text-slate-600{color:#94a3b8!important}
+        .dm .text-slate-500,.dm .text-slate-400{color:#64748b!important}
+        .dm .text-3xl{color:#39ff14!important;text-shadow:0 0 12px rgba(57,255,20,.5)}
+        .dm .text-xl{color:#00f0ff!important;text-shadow:0 0 10px rgba(0,240,255,.5)}
+        .dm input,.dm select,.dm textarea{background:#334155!important;color:#e2e8f0!important;border-color:#475569!important}
+        .dm .group\\:hover h3,.dm .group:hover h3{color:#39ff14!important}
+        .dm [class*="bg-indigo-100"]{background:rgba(99,102,241,.2)!important;color:#818cf8!important}
+        .dm [class*="bg-purple-100"]{background:rgba(168,85,247,.2)!important;color:#c084fc!important}
+        .dm [class*="bg-amber-100"]{background:rgba(245,158,11,.2)!important;color:#fbbf24!important}
+        .dm [class*="bg-emerald-100"]{background:rgba(16,185,129,.2)!important;color:#34d399!important}
+        .dm [class*="bg-red-100"]{background:rgba(239,68,68,.2)!important;color:#f87171!important}
+        .dm .bg-red-50{background:rgba(239,68,68,.15)!important}
+        .dm .bg-indigo-50{background:rgba(99,102,241,.15)!important}
+        .dm .bg-indigo-200{background:rgba(99,102,241,.3)!important}
+        .dm .bg-blue-50{background:rgba(59,130,246,.15)!important}
+        .dm .text-indigo-700,.dm .text-indigo-800{color:#818cf8!important}
+        .dm .text-indigo-900,.dm .formula-text{color:#a5b4fc!important;text-shadow:0 0 6px rgba(165,180,252,.4)}
+        .dm .text-red-800,.dm .text-red-700{color:#f87171!important;text-shadow:0 0 6px rgba(248,113,113,.3)}
+        .dm .text-red-600{color:#fb7185!important}
+        .dm .text-red-500{color:#f87171!important}
+        .dm .text-amber-900,.dm .text-amber-800{color:#fbbf24!important}
+        .dm .bg-amber-400{background:#78350f!important;color:#fbbf24!important}
+        .dm .text-emerald-600,.dm .text-emerald-700{color:#34d399!important}
+        .dm .text-purple-500,.dm .text-purple-600,.dm .text-purple-700{color:#c084fc!important}
+        .dm .text-blue-800{color:#93c5fd!important}
+        .dm [class*="from-amber-50"]{background:rgba(245,158,11,.1)!important}
+        .dm [class*="from-indigo-50"]{background:rgba(99,102,241,.1)!important}
+        .dm [class*="border-amber"]{border-color:rgba(245,158,11,.3)!important}
+        .dm [class*="border-indigo"]{border-color:rgba(99,102,241,.3)!important}
+        .dm [class*="border-blue"]{border-color:rgba(59,130,246,.3)!important}
+        .dm [class*="border-red"]{border-color:rgba(239,68,68,.3)!important}
+        .dm .math-text{background:#1e293b!important;color:#e2e8f0!important;border:1px solid #334155}
+        .dm .font-bold{color:#00f0ff!important;text-shadow:0 0 8px rgba(0,240,255,.3)}
+        .dm .font-bold.text-white{color:#fff!important;text-shadow:none}
+        .dm .font-semibold.text-white{color:#fff!important}
+        @media print{
+          .np,.no-print{display:none!important}
+          nav{display:none!important}
+          header{display:none!important}
+          .fs1,.fs2{transform:none!important}
+          button{display:none!important}
+          textarea{display:none!important}
+          .animate-spin,.animate-pulse{animation:none!important}
+          body,.min-h-screen{padding-bottom:0!important}
+          @page{margin:15mm 10mm}
+          .print-area,.print-area *{color-adjust:exact!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
+          .print-area{background:#fff!important;color:#1e293b!important}
+          .dm{background:#f8fafc!important;color:#334155!important}
+          .dm *{text-shadow:none!important;box-shadow:none!important}
+          .dm .bg-slate-50{background:#f8fafc!important}
+          .dm .bg-white{background:#fff!important}
+          .dm .bg-slate-100{background:#f1f5f9!important}
+          .dm .text-slate-800{color:#1e293b!important}
+          .dm .text-slate-700{color:#334155!important}
+          .dm .text-slate-600{color:#475569!important}
+          .dm .text-slate-500,.dm .text-slate-400{color:#64748b!important}
+          .dm .text-3xl{color:#1e293b!important}
+          .dm .text-xl{color:#1e293b!important}
+          .dm .font-bold{color:#1e293b!important}
+          .dm .text-indigo-700,.dm .text-indigo-800{color:#4338ca!important}
+          .dm .text-indigo-900,.dm .formula-text{color:#312e81!important}
+          .dm .bg-indigo-50{background:#eef2ff!important}
+          .dm .bg-indigo-200{background:#c7d2fe!important}
+          .dm [class*="bg-indigo-100"]{background:#e0e7ff!important;color:#4338ca!important}
+          .dm [class*="border-indigo"]{border-color:#a5b4fc!important}
+          .dm .text-red-800,.dm .text-red-700{color:#991b1b!important}
+          .dm .text-red-600,.dm .text-red-500{color:#dc2626!important}
+          .dm .bg-red-50{background:#fef2f2!important}
+          .dm [class*="bg-red-100"]{background:#fee2e2!important;color:#991b1b!important}
+          .dm .text-emerald-600,.dm .text-emerald-700{color:#059669!important}
+          .dm [class*="bg-emerald-100"]{background:#d1fae5!important;color:#065f46!important}
+          .dm .text-amber-900,.dm .text-amber-800{color:#92400e!important}
+          .dm [class*="bg-amber-100"]{background:#fef3c7!important;color:#92400e!important}
+          .dm .text-purple-500,.dm .text-purple-600,.dm .text-purple-700{color:#7c3aed!important}
+          .dm [class*="bg-purple-100"]{background:#f3e8ff!important;color:#6b21a8!important}
+          .dm .text-blue-800{color:#1e40af!important}
+          .dm .bg-blue-50{background:#eff6ff!important}
+          .dm [class*="from-amber-50"]{background:#fffbeb!important}
+          .dm [class*="from-indigo-50"]{background:#eef2ff!important}
+          .dm [class*="border-slate"]{border-color:#e2e8f0!important}
+          .dm [class*="border-amber"]{border-color:#fde68a!important}
+          .dm [class*="border-blue"]{border-color:#bfdbfe!important}
+          .dm [class*="border-red"]{border-color:#fecaca!important}
+          .dm .math-text{background:#f8fafc!important;color:#1e293b!important;border-color:#e2e8f0!important}
+          .dm input,.dm select,.dm textarea{background:#fff!important;color:#1e293b!important;border-color:#cbd5e1!important}
+        }
+      `}</style>
+
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30">
+        <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">📐</div>
+            <h1 className="font-bold text-slate-800">수학 오답노트</h1>
+          </div>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setFsize((n) => (n + 1) % 3)} title="글자 크기 조절"
+              className={"px-2 py-1.5 rounded-lg text-xs font-bold " + (dark ? "hover:bg-slate-700 text-slate-300" : "hover:bg-slate-100 text-slate-600")}>
+              <span className={fsize > 0 ? (dark ? "text-cyan-400" : "text-indigo-600") : ""}>{fsLabel}</span>
+            </button>
+            <button onClick={() => setDark(!dark)} title={dark ? "라이트 모드" : "다크 모드"}
+              className={"p-2 rounded-lg text-lg " + (dark ? "hover:bg-slate-700" : "hover:bg-slate-100")}>
+              {dark ? "☀️" : "🌙"}
+            </button>
+            <button onClick={handleReload} title="새로고침"
+              className={"p-2 rounded-lg " + (dark ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500")}>
+              <Ic n="rld" sz={16} />
+            </button>
+            <button onClick={() => setView("settings")} title="설정"
+              className={"p-2 rounded-lg " + (dark ? "hover:bg-slate-700 text-slate-400" : "hover:bg-slate-100 text-slate-500")}>
+              <Ic n="cog" sz={18} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        {view === "library" && <Library problems={problems} onSelect={(p) => { setSelected(p); setView("detail"); }} />}
+        {view === "upload" && <UploadView onSave={handleNewProblem} onCancel={() => setView("library")} />}
+        {view === "stats" && <Stats problems={problems} />}
+        {view === "settings" && <Settings onClose={() => go("library")} onConfigSaved={handleConfigSaved} />}
+        {view === "detail" && selected && (
+          <Detail problem={selected} onClose={() => go("library")} onUpdate={handleUpdate} onDelete={handleDelete} />
+        )}
+      </main>
+
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 no-print">
+        <div className="max-w-3xl mx-auto grid grid-cols-3 relative">
+          <button onClick={() => go("library")} className={"py-3 flex flex-col items-center gap-0.5 transition-colors " + (view === "library" ? "text-indigo-600" : "text-slate-500")}>
+            <Ic n="home" sz={20} /><span className="text-[10px] font-semibold">라이브러리</span>
+          </button>
+          <button onClick={() => setView("upload")} className="py-3 flex flex-col items-center gap-0.5">
+            <div className="w-12 h-12 -mt-5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg active:scale-95 transition-transform">
+              <Ic n="plus" sz={22} cls="text-white" />
+            </div>
+            <span className={"text-[10px] font-semibold " + (view === "upload" ? "text-indigo-600" : "text-slate-500")}>새 문제</span>
+          </button>
+          <button onClick={() => go("stats")} className={"py-3 flex flex-col items-center gap-0.5 transition-colors " + (view === "stats" ? "text-indigo-600" : "text-slate-500")}>
+            <Ic n="bar" sz={20} /><span className="text-[10px] font-semibold">통계</span>
+          </button>
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(React.createElement(App));
+  </script>
+</body>
+</html>
