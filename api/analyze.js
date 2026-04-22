@@ -1,0 +1,33 @@
+export default async function handler(req, res) {
+  if (req.method === "OPTIONS") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const { imageBase64, mimeType, apiKey } = req.body;
+
+  if (!apiKey) return res.status(400).json({ error: { message: "API 키가 필요합니다." } });
+  if (!imageBase64) return res.status(400).json({ error: { message: "이미지가 필요합니다." } });
+
+  const systemPrompt = `당신은 중학교·고등학교 수학 교육 전문가입니다.
+학생이 업로드한 수학 문제 이미지를 분석하고 아래 JSON 형식으로만 응답하세요.
+JSON 외의 텍스트(설명, 마크다운 코드블록 등)는 절대 포함하지 마세요.
+
+{"title":"문제 요약 제목","grade":"학년(중1/중2/중3/고1/고2/고3)","unit":"단원명","difficulty":"하 또는 중 또는 상","tags":["태그"],"problemText":"문제 원문","errorStep":null,"errorAnalysis":null,"solutionSteps":[{"num":1,"title":"단계명","math":"수식","explain":"설명"}],"keyConcepts":["개념"],"keyFormulas":["공식"],"tip":"학습 팁"}
+
+규칙:
+- 풀이가 포함된 이미지면 학생의 오류를 찾아 errorStep(번호)과 errorAnalysis(설명)를 채우세요.
+- 문제만 있으면 올바른 풀이를 작성하고 errorStep/errorAnalysis는 null로 두세요.
+- solutionSteps는 3~6단계로 작성하세요.
+- math 필드에는 수식을 텍스트로 표기하세요 (예: x = (-b ± √(b²-4ac)) / 2a).`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      hea
