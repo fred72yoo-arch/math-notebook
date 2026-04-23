@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="theme-color" content="#6366f1" />
-  <title>수학 오답노트</title>
+  <title>NW_HWs' 수학 오답 노트 by Yoo</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>" />
   <script>
     const _w = console.warn;
@@ -24,9 +24,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+  <!-- KaTeX for math rendering -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <style>
     * { -webkit-tap-highlight-color: transparent; }
-    body { margin: 0; padding: 0; overscroll-behavior: none; }
+    body { margin: 0; padding: 0; overscroll-behavior: none; overflow-x: auto; }
     @supports(padding: env(safe-area-inset-bottom)) {
       nav { padding-bottom: env(safe-area-inset-bottom) !important; }
     }
@@ -77,6 +80,50 @@ function Ic({ n, sz = 20, cls = "" }) {
 
 /* ─── 유틸 ─── */
 const uid = () => "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+
+/* ─── 수학 텍스트 → KaTeX 렌더링 (v2 추가) ─── */
+function textToLatex(text) {
+  if (!text) return text;
+  let s = text;
+  // √(...) → \sqrt{...}
+  s = s.replace(/√\(([^)]+)\)/g, '\\sqrt{$1}');
+  // 단독 √ 뒤 숫자/문자
+  s = s.replace(/√(\d+)/g, '\\sqrt{$1}');
+  s = s.replace(/√([a-zA-Z])/g, '\\sqrt{$1}');
+  // ± → \pm
+  s = s.replace(/±/g, '\\pm');
+  // ² ³ → ^2 ^3
+  s = s.replace(/²/g, '^2');
+  s = s.replace(/³/g, '^3');
+  // × → \times
+  s = s.replace(/×/g, '\\times');
+  // ÷ → \div
+  s = s.replace(/÷/g, '\\div');
+  // ≈ → \approx
+  s = s.replace(/≈/g, '\\approx');
+  // ≠ → \neq
+  s = s.replace(/≠/g, '\\neq');
+  // ≤ ≥ → \leq \geq
+  s = s.replace(/≤/g, '\\leq');
+  s = s.replace(/≥/g, '\\geq');
+  // π → \pi
+  s = s.replace(/π/g, '\\pi');
+  return s;
+}
+
+function MathText({ text }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && text && typeof katex !== "undefined") {
+      try {
+        katex.render(textToLatex(text), ref.current, { throwOnError: false, displayMode: false });
+      } catch { ref.current.textContent = text; }
+    }
+  }, [text]);
+  if (!text) return null;
+  if (typeof katex === "undefined") return <span>{text}</span>;
+  return <span ref={ref} />;
+}
 
 /* ─── 이미지 압축 (v2 추가) ─── */
 function compressImage(file, maxWidth = 1200, quality = 0.75) {
@@ -286,7 +333,7 @@ function StepByStep({ steps, errorStep }) {
                     {isSp ? "⏸" : "🔊"}
                   </button>
                 </div>
-                {s.math && <div className="my-2 px-3 py-2 bg-slate-50 rounded-lg overflow-x-auto text-sm font-mono math-text">{s.math}</div>}
+                {s.math && <div className="my-2 px-3 py-2 bg-slate-50 rounded-lg overflow-x-auto text-sm font-mono math-text"><MathText text={s.math} /></div>}
                 {s.explain && <div className="text-sm text-slate-600">{s.explain}</div>}
                 {isE && <div className="mt-2 text-xs text-red-600 font-medium flex items-center gap-1"><Ic n="alert" sz={12} /> 여기서부터 오류</div>}
               </div>
@@ -514,18 +561,22 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
   };
 
   const [confirmDel, setConfirmDel] = useState(false);
+  const [editTitle, setEditTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(initP.title || "");
+  useEffect(() => { setTitleDraft(initP.title || ""); setEditTitle(false); }, [initP.id]);
   useEffect(() => { if (confirmDel) { const t = setTimeout(() => setConfirmDel(false), 3000); return () => clearTimeout(t); } }, [confirmDel]);
   const handleDelete = () => { if (!confirmDel) { setConfirmDel(true); return; } onDelete(problem.id); };
+  const handleTitleSave = () => { if (titleDraft.trim()) { upd({ ...problem, title: titleDraft.trim() }); } setEditTitle(false); };
 
   return (
     <div className="max-w-3xl mx-auto p-4 space-y-4">
       <div className="flex items-center justify-between">
         <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-lg flex items-center gap-1 text-slate-700"><Ic n="cl" /> 뒤로</button>
         <div className="flex gap-1">
-          <button onClick={() => upd({ ...problem, bookmarked: !problem.bookmarked })}
+          <button onClick={() => upd({ ...problem, bookmarked: !problem.bookmarked })} title={problem.bookmarked ? "북마크 해제" : "북마크 추가"}
             className={"p-2 rounded-lg transition-colors " + (problem.bookmarked ? "text-amber-500 bg-amber-50" : "text-slate-400 hover:bg-slate-100")}><Ic n="bm" sz={18} /></button>
-          <button onClick={() => window.print()} className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"><Ic n="print" sz={18} /></button>
-          <button onClick={handleDelete}
+          <button onClick={() => window.print()} title="인쇄하기" className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"><Ic n="print" sz={18} /></button>
+          <button onClick={handleDelete} title="삭제하기"
             className={"p-2 rounded-lg transition-colors " + (confirmDel ? "bg-red-500 text-white" : "text-red-500 hover:bg-red-50")}>
             {confirmDel ? <span className="text-xs font-semibold px-1">확인?</span> : <Ic n="del" sz={18} />}
           </button>
@@ -534,7 +585,22 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
 
       <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
         <div className="flex items-start justify-between gap-3 mb-3">
-          <h1 className="text-xl font-bold text-slate-800">{problem.title}</h1>
+          {editTitle ? (
+            <div className="flex-1 flex items-center gap-2">
+              <input type="text" value={titleDraft} onChange={(e) => setTitleDraft(e.target.value)}
+                className="flex-1 px-3 py-1.5 border border-indigo-300 rounded-lg text-lg font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleTitleSave(); if (e.key === "Escape") { setTitleDraft(problem.title); setEditTitle(false); } }} />
+              <button onClick={handleTitleSave} className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold flex-shrink-0">저장</button>
+              <button onClick={() => { setTitleDraft(problem.title); setEditTitle(false); }} className="px-3 py-1.5 bg-slate-100 rounded-lg text-xs font-semibold flex-shrink-0">취소</button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <h1 className="text-xl font-bold text-slate-800 truncate">{problem.title}</h1>
+              <button onClick={() => setEditTitle(true)} className="p-1 hover:bg-slate-100 rounded-lg flex-shrink-0 text-slate-400 hover:text-indigo-600" title="제목 수정">
+                <Ic n="pen" sz={14} />
+              </button>
+            </div>
+          )}
           {problem.mastered && <span className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold flex-shrink-0">✅ 마스터</span>}
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
@@ -619,7 +685,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
           <div className="space-y-2">
             {problem.keyFormulas.map((f, i) => (
               <div key={i} className="px-4 py-3 bg-white border border-indigo-200 rounded-xl shadow-sm">
-                <div className="font-mono text-sm text-indigo-900 font-semibold text-center leading-relaxed formula-text">{f}</div>
+                <div className="font-mono text-sm text-indigo-900 font-semibold text-center leading-relaxed formula-text"><MathText text={f} /></div>
               </div>
             ))}
           </div>
@@ -728,7 +794,7 @@ function Library({ problems, onSelect }) {
         <button onClick={() => setPrintMode(false)} className="mb-4 text-sm np flex items-center gap-1 hover:underline" style={{color:"#4f46e5"}}><Ic n="cl" sz={14} /> 돌아가기</button>
         <div className="text-center mb-8 border-b-2 pb-6">
           <div className="text-3xl mb-2">📐</div>
-          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>수학 오답노트</h1>
+          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>NW_HWs' 수학 오답 노트</h1>
           <p className="text-sm mt-2" style={{color:"#64748b"}}>{fG !== "all" ? fG : "모든 학년"} · {fU !== "all" ? fU : "모든 단원"} · {list.length}문제 · {new Date().toLocaleDateString("ko-KR")}</p>
         </div>
         {list.map((p, idx) => (
@@ -749,13 +815,13 @@ function Library({ problems, onSelect }) {
             {p.solutionSteps && p.solutionSteps.map((s) => (
               <div key={s.num} className={"flex gap-2 mb-2 text-sm" + (p.errorStep === s.num ? " pl-2 border-l-2" : "")} style={p.errorStep === s.num ? {borderColor:"#f87171"} : {}}>
                 <span className="font-bold" style={{color:"#4f46e5"}}>{s.num}.</span>
-                <div><strong>{s.title}</strong>{s.math && <span className="font-mono text-xs ml-1">{s.math}</span>}<div className="text-xs" style={{color:"#64748b"}}>{s.explain}</div></div>
+                <div><strong>{s.title}</strong>{s.math && <span className="font-mono text-xs ml-1"><MathText text={s.math} /></span>}<div className="text-xs" style={{color:"#64748b"}}>{s.explain}</div></div>
               </div>
             ))}
             {(p.keyFormulas || []).length > 0 && (
               <div className="mt-2 p-3 rounded-xl" style={{background:"#eef2ff"}}>
                 <div className="font-bold text-sm mb-1" style={{color:"#312e81"}}>📐 핵심 공식</div>
-                {p.keyFormulas.map((f, i) => <div key={i} className="font-mono text-xs" style={{color:"#312e81"}}>{f}</div>)}
+                {p.keyFormulas.map((f, i) => <div key={i} className="font-mono text-xs" style={{color:"#312e81"}}><MathText text={f} /></div>)}
               </div>
             )}
             {p.tip && <div className="mt-2 p-2 rounded-lg text-xs" style={{background:"#fffbeb",color:"#92400e"}}>💡 {p.tip}</div>}
@@ -1101,8 +1167,8 @@ function App() {
         .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
         .scrollbar-hide::-webkit-scrollbar{display:none}
         .scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}
-        .fs1{transform:scale(1.15);transform-origin:top center}
-        .fs2{transform:scale(1.3);transform-origin:top center}
+        .fs1{transform:scale(1.15);transform-origin:top left}
+        .fs2{transform:scale(1.3);transform-origin:top left}
         .dm{background:#0f172a!important;color:#cbd5e1}
         .dm .bg-slate-50{background:#0f172a!important}
         .dm .bg-white{background:#1e293b!important}
@@ -1204,7 +1270,7 @@ function App() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">📐</div>
-            <h1 className="font-bold text-slate-800">수학 오답노트</h1>
+            <h1 className="font-bold text-slate-800 text-sm">NW_HWs' 수학 오답 노트</h1>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setFsize((n) => (n + 1) % 3)} title="글자 크기 조절"
