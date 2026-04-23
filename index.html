@@ -2,11 +2,11 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="theme-color" content="#6366f1" />
-  <title>NW_HW 수학 오답노트_콩</title>
+  <title>NW_HW 수학 오답노트 byYoo</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>" />
   <script>
     const _w = console.warn;
@@ -29,7 +29,7 @@
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <style>
     * { -webkit-tap-highlight-color: transparent; }
-    body { margin: 0; padding: 0; overscroll-behavior: none; overflow-x: auto; }
+    body { margin: 0; padding: 0; }
     @supports(padding: env(safe-area-inset-bottom)) {
       nav { padding-bottom: env(safe-area-inset-bottom) !important; }
     }
@@ -794,7 +794,7 @@ function Library({ problems, onSelect }) {
         <button onClick={() => setPrintMode(false)} className="mb-4 text-sm np flex items-center gap-1 hover:underline" style={{color:"#4f46e5"}}><Ic n="cl" sz={14} /> 돌아가기</button>
         <div className="text-center mb-8 border-b-2 pb-6">
           <div className="text-3xl mb-2">📐</div>
-          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>NW_HW 수학 오답노트_콩</h1>
+          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>NW_HW 수학 오답노트 byYoo</h1>
           <p className="text-sm mt-2" style={{color:"#64748b"}}>{fG !== "all" ? fG : "모든 학년"} · {fU !== "all" ? fU : "모든 단원"} · {list.length}문제 · {new Date().toLocaleDateString("ko-KR")}</p>
         </div>
         {list.map((p, idx) => (
@@ -1167,8 +1167,8 @@ function App() {
         .line-clamp-2{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
         .scrollbar-hide::-webkit-scrollbar{display:none}
         .scrollbar-hide{-ms-overflow-style:none;scrollbar-width:none}
-        .fs1{transform:scale(1.15);transform-origin:top left}
-        .fs2{transform:scale(1.3);transform-origin:top left}
+        .fs1{zoom:1.15}
+        .fs2{zoom:1.3}
         .dm{background:#0f172a!important;color:#cbd5e1}
         .dm .bg-slate-50{background:#0f172a!important}
         .dm .bg-white{background:#1e293b!important}
@@ -1217,7 +1217,7 @@ function App() {
           .np,.no-print{display:none!important}
           nav{display:none!important}
           header{display:none!important}
-          .fs1,.fs2{transform:none!important}
+          .fs1,.fs2{zoom:1!important}
           button{display:none!important}
           textarea{display:none!important}
           .animate-spin,.animate-pulse{animation:none!important}
@@ -1270,7 +1270,7 @@ function App() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">📐</div>
-            <h1 className="font-bold text-slate-800 text-sm">NW_HW 수학 오답노트_콩</h1>
+            <h1 className="font-bold text-slate-800 text-sm">NW_HW 수학 오답노트 byYoo</h1>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setFsize((n) => (n + 1) % 3)} title="글자 크기 조절"
