@@ -794,7 +794,7 @@ function Library({ problems, onSelect }) {
         <button onClick={() => setPrintMode(false)} className="mb-4 text-sm np flex items-center gap-1 hover:underline" style={{color:"#4f46e5"}}><Ic n="cl" sz={14} /> 돌아가기</button>
         <div className="text-center mb-8 border-b-2 pb-6">
           <div className="text-3xl mb-2">📐</div>
-          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>NW_HWs' 수학 오답 노트</h1>
+          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>NW_HW 수학 오답노트_콩</h1>
           <p className="text-sm mt-2" style={{color:"#64748b"}}>{fG !== "all" ? fG : "모든 학년"} · {fU !== "all" ? fU : "모든 단원"} · {list.length}문제 · {new Date().toLocaleDateString("ko-KR")}</p>
         </div>
         {list.map((p, idx) => (
@@ -1270,7 +1270,7 @@ function App() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">📐</div>
-            <h1 className="font-bold text-slate-800 text-sm">NW_HWs' 수학 오답 노트</h1>
+            <h1 className="font-bold text-slate-800 text-sm">NW_HW 수학 오답노트_콩</h1>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setFsize((n) => (n + 1) % 3)} title="글자 크기 조절"
