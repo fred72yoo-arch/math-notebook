@@ -372,7 +372,7 @@ function PinLock({ onUnlock }) {
 }
 
 /* ─── 단계별 풀이 ─── */
-function StepByStep({ steps, errorStep }) {
+function StepByStep({ steps, errorStep, onReanalyze, reanalyzing }) {
   const [shown, setShown] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
@@ -443,9 +443,33 @@ function StepByStep({ steps, errorStep }) {
         </button>
       )}
       {vis === steps.length && (
-        <div className="text-center py-3 text-emerald-600 font-semibold flex items-center justify-center gap-2">
-          <Ic n="chk" sz={18} /> 풀이 완료!
-        </div>
+        <>
+          {/* 최종 정답 강조 박스 */}
+          {steps.length > 0 && steps[steps.length - 1].math && (
+            <div className="p-4 rounded-xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50"
+              style={{ animation: "fadeInUp 0.4s ease-out" }}>
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🎯</span>
+                <span className="font-bold text-emerald-800">최종 정답</span>
+              </div>
+              <div className="px-4 py-3 bg-white rounded-lg border border-emerald-200 text-center">
+                <span className="text-lg font-bold text-emerald-700"><MathText text={steps[steps.length - 1].math} /></span>
+              </div>
+            </div>
+          )}
+          <div className="flex items-center justify-center gap-3 py-3">
+            <div className="text-emerald-600 font-semibold flex items-center gap-2">
+              <Ic n="chk" sz={18} /> 풀이 완료!
+            </div>
+            {onReanalyze && (
+              <button onClick={onReanalyze} disabled={reanalyzing} title="AI 재분석"
+                className={"px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-colors " +
+                  (reanalyzing ? "bg-indigo-100 text-indigo-500 animate-pulse" : "bg-slate-100 hover:bg-indigo-100 text-slate-600 hover:text-indigo-600")}>
+                {reanalyzing ? <><span className="animate-spin">⟳</span> 재분석 중...</> : "재분석"}
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
@@ -721,10 +745,6 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
         <div className="flex gap-1">
           <button onClick={() => upd({ ...problem, bookmarked: !problem.bookmarked })} title={problem.bookmarked ? "북마크 해제" : "북마크 추가"}
             className={"p-2 rounded-lg transition-colors " + (problem.bookmarked ? "text-amber-500 bg-amber-50" : "text-slate-400 hover:bg-slate-100")}><Ic n="bm" sz={18} /></button>
-          <button onClick={handleReanalyze} disabled={reanalyzing} title="AI 재분석"
-            className={"p-2 rounded-lg transition-colors " + (reanalyzing ? "bg-indigo-100 text-indigo-500 animate-pulse" : "text-indigo-500 hover:bg-indigo-50")}>
-            {reanalyzing ? <span className="animate-spin text-sm">⟳</span> : <Ic n="rld" sz={18} />}
-          </button>
           <button onClick={() => window.print()} title="인쇄하기" className="p-2 rounded-lg text-slate-600 hover:bg-slate-100"><Ic n="print" sz={18} /></button>
           <button onClick={handleDelete} title="삭제하기"
             className={"p-2 rounded-lg transition-colors " + (confirmDel ? "bg-red-500 text-white" : "text-red-500 hover:bg-red-50")}>
@@ -812,18 +832,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
       {(mode !== "review" || showSol) && problem.solutionSteps && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-3"><Ic n="pen" sz={15} cls="text-emerald-600" /><span className="font-semibold">올바른 풀이</span></div>
-          <StepByStep key={problem.id} steps={problem.solutionSteps} errorStep={problem.errorStep} />
-        </div>
-      )}
-
-      {/* 재분석 진행 중 */}
-      {reanalyzing && (
-        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex items-center gap-3">
-          <span className="animate-spin text-lg">⟳</span>
-          <div>
-            <div className="font-semibold text-indigo-700 text-sm">AI 재분석 중...</div>
-            <div className="text-xs text-indigo-500">같은 문제를 다시 분석하고 있습니다 (15~30초)</div>
-          </div>
+          <StepByStep key={problem.id} steps={problem.solutionSteps} errorStep={problem.errorStep} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />
         </div>
       )}
 
