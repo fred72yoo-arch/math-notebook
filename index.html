@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="theme-color" content="#6366f1" />
-  <title>HW 수학 오답노트 byYoo</title>
+  <title>HW 수학 오답노트 byYHS</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📐</text></svg>" />
   <script>
     const _w = console.warn;
@@ -297,6 +297,78 @@ function useVoice() {
 
   const stop = useCallback(() => { window.speechSynthesis.cancel(); setSpeaking(null); }, []);
   return { speaking, speak, stop };
+}
+
+/* ─── PIN 잠금 화면 ─── */
+function PinLock({ onUnlock }) {
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState(false);
+  const [shake, setShake] = useState(false);
+
+  const handleDigit = (d) => {
+    if (pin.length >= 4) return;
+    const next = pin + d;
+    setPin(next);
+    setError(false);
+    if (next.length === 4) {
+      const stored = localStorage.getItem("app_pin");
+      if (next === stored) {
+        sessionStorage.setItem("pin_unlocked", "1");
+        onUnlock();
+      } else {
+        setShake(true);
+        setError(true);
+        setTimeout(() => { setPin(""); setShake(false); }, 500);
+      }
+    }
+  };
+
+  const handleDelete = () => { setPin((p) => p.slice(0, -1)); setError(false); };
+
+  const dots = [0, 1, 2, 3].map((i) => (
+    <div key={i} className={"w-4 h-4 rounded-full border-2 transition-all duration-200 " +
+      (i < pin.length ? "bg-indigo-500 border-indigo-500 scale-110" : "border-slate-300")} />
+  ));
+
+  const numpad = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9],
+    [null, 0, "del"],
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50 flex flex-col items-center justify-center px-6"
+      style={{ fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
+      <style>{`
+        @keyframes pinShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
+        .pin-shake{animation:pinShake 0.4s ease-out}
+      `}</style>
+      <div className="text-5xl mb-4">📐</div>
+      <h1 className="text-lg font-bold text-slate-800 mb-1">HW 수학 오답노트 byYHS</h1>
+      <p className="text-sm text-slate-500 mb-8">비밀번호를 입력하세요</p>
+      <div className={"flex gap-4 mb-3 " + (shake ? "pin-shake" : "")}>{dots}</div>
+      {error && <div className="text-xs text-red-500 font-semibold mb-2">비밀번호가 틀렸습니다</div>}
+      {!error && <div className="h-5 mb-2" />}
+      <div className="grid grid-cols-3 gap-3 w-64">
+        {numpad.flat().map((k, i) => {
+          if (k === null) return <div key={i} />;
+          if (k === "del") return (
+            <button key={i} onClick={handleDelete}
+              className="w-full h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors shadow-sm">
+              ⌫
+            </button>
+          );
+          return (
+            <button key={i} onClick={() => handleDigit(String(k))}
+              className="w-full h-14 rounded-2xl bg-white border border-slate-200 text-xl font-semibold text-slate-800 hover:bg-indigo-50 active:bg-indigo-100 transition-colors shadow-sm">
+              {k}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /* ─── 단계별 풀이 ─── */
@@ -833,7 +905,7 @@ function Library({ problems, onSelect }) {
         {/* 헤더 */}
         <div className="text-center mb-8 border-b-2 pb-6">
           <div className="text-3xl mb-2">📐</div>
-          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>HW 수학 오답노트 byYoo</h1>
+          <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>HW 수학 오답노트 byYHS</h1>
           <p className="text-sm mt-2" style={{color:"#64748b"}}>{fG !== "all" ? fG : "모든 학년"} · {fU !== "all" ? fU : "모든 단원"} · {list.length}문제 · {new Date().toLocaleDateString("ko-KR")}</p>
         </div>
 
@@ -977,9 +1049,59 @@ function Settings({ onClose, onConfigSaved }) {
   const [testResult, setTestResult] = useState(null);
   const [testing, setTesting] = useState(false);
   const [saved, setSaved] = useState(false);
+  // PIN 관리 상태
+  const [pinMode, setPinMode] = useState("idle"); // idle | set | change | remove
+  const [pinStep, setPinStep] = useState(0);
+  const [pinInput, setPinInput] = useState("");
+  const [pinNew, setPinNew] = useState("");
+  const [pinMsg, setPinMsg] = useState(null);
+  const hasPin = !!localStorage.getItem("app_pin");
 
   const hasApi = !!localStorage.getItem("anthropic_api_key");
   const hasFb = !!localStorage.getItem("firebase_config");
+
+  const resetPin = () => { setPinMode("idle"); setPinStep(0); setPinInput(""); setPinNew(""); setPinMsg(null); };
+
+  const handlePinSubmit = () => {
+    const stored = localStorage.getItem("app_pin");
+    if (pinMode === "set") {
+      if (pinStep === 0) {
+        if (pinInput.length !== 4 || !/^\d{4}$/.test(pinInput)) { setPinMsg({ ok: false, msg: "숫자 4자리를 입력하세요." }); return; }
+        setPinNew(pinInput); setPinInput(""); setPinStep(1); setPinMsg(null);
+      } else if (pinStep === 1) {
+        if (pinInput !== pinNew) { setPinMsg({ ok: false, msg: "비밀번호가 일치하지 않습니다." }); setPinInput(""); return; }
+        localStorage.setItem("app_pin", pinNew);
+        setPinMsg({ ok: true, msg: "✅ 비밀번호가 설정되었습니다." });
+        setTimeout(resetPin, 1500);
+      }
+    } else if (pinMode === "change") {
+      if (pinStep === 0) {
+        if (pinInput !== stored) { setPinMsg({ ok: false, msg: "현재 비밀번호가 틀렸습니다." }); setPinInput(""); return; }
+        setPinInput(""); setPinStep(1); setPinMsg(null);
+      } else if (pinStep === 1) {
+        if (pinInput.length !== 4 || !/^\d{4}$/.test(pinInput)) { setPinMsg({ ok: false, msg: "숫자 4자리를 입력하세요." }); return; }
+        setPinNew(pinInput); setPinInput(""); setPinStep(2); setPinMsg(null);
+      } else if (pinStep === 2) {
+        if (pinInput !== pinNew) { setPinMsg({ ok: false, msg: "비밀번호가 일치하지 않습니다." }); setPinInput(""); return; }
+        localStorage.setItem("app_pin", pinNew);
+        setPinMsg({ ok: true, msg: "✅ 비밀번호가 변경되었습니다." });
+        setTimeout(resetPin, 1500);
+      }
+    } else if (pinMode === "remove") {
+      if (pinInput !== stored) { setPinMsg({ ok: false, msg: "비밀번호가 틀렸습니다." }); setPinInput(""); return; }
+      localStorage.removeItem("app_pin");
+      sessionStorage.removeItem("pin_unlocked");
+      setPinMsg({ ok: true, msg: "✅ 비밀번호가 해제되었습니다." });
+      setTimeout(resetPin, 1500);
+    }
+  };
+
+  const pinLabel = () => {
+    if (pinMode === "set") return pinStep === 0 ? "새 비밀번호 (숫자 4자리)" : "비밀번호 확인 (다시 입력)";
+    if (pinMode === "change") return pinStep === 0 ? "현재 비밀번호" : pinStep === 1 ? "새 비밀번호 (숫자 4자리)" : "새 비밀번호 확인";
+    if (pinMode === "remove") return "현재 비밀번호 입력";
+    return "";
+  };
 
   const handleSave = () => {
     if (apiKey.trim()) localStorage.setItem("anthropic_api_key", apiKey.trim());
@@ -1012,10 +1134,12 @@ function Settings({ onClose, onConfigSaved }) {
   };
 
   const handleReset = () => {
-    if (!confirm("모든 설정을 초기화하시겠습니까?")) return;
+    if (!confirm("모든 설정을 초기화하시겠습니까?\n(비밀번호도 해제됩니다)")) return;
     localStorage.removeItem("anthropic_api_key");
     localStorage.removeItem("firebase_config");
-    setApiKey(""); setFbConfig(""); setTestResult(null);
+    localStorage.removeItem("app_pin");
+    sessionStorage.removeItem("pin_unlocked");
+    setApiKey(""); setFbConfig(""); setTestResult(null); resetPin();
   };
 
   return (
@@ -1072,6 +1196,65 @@ function Settings({ onClose, onConfigSaved }) {
         )}
       </div>
 
+      {/* PIN 잠금 설정 */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200 space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-sm">🔒 앱 잠금</div>
+            <div className="text-xs text-slate-500 mt-0.5">{hasPin ? "비밀번호가 설정되어 있습니다" : "비밀번호 미설정 (누구나 접근 가능)"}</div>
+          </div>
+          <span className={"text-xs font-semibold px-2 py-1 rounded-full " + (hasPin ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500")}>
+            {hasPin ? "ON" : "OFF"}
+          </span>
+        </div>
+
+        {pinMode === "idle" ? (
+          <div className="flex gap-2">
+            {!hasPin ? (
+              <button onClick={() => setPinMode("set")}
+                className="flex-1 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm font-semibold transition-colors">
+                🔑 비밀번호 설정
+              </button>
+            ) : (
+              <>
+                <button onClick={() => setPinMode("change")}
+                  className="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-semibold transition-colors">
+                  변경
+                </button>
+                <button onClick={() => setPinMode("remove")}
+                  className="flex-1 py-2 rounded-xl bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold transition-colors">
+                  해제
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-slate-600">{pinLabel()}</label>
+            <div className="flex gap-2">
+              <input type="password" inputMode="numeric" maxLength={4} pattern="[0-9]*"
+                value={pinInput} onChange={(e) => setPinInput(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="●●●●" autoFocus
+                className="flex-1 px-3 py-2.5 border border-slate-300 rounded-lg text-center text-lg tracking-[0.5em] font-mono focus:ring-2 focus:ring-indigo-500 outline-none"
+                onKeyDown={(e) => { if (e.key === "Enter") handlePinSubmit(); }} />
+              <button onClick={handlePinSubmit}
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold flex-shrink-0 hover:bg-indigo-700">
+                확인
+              </button>
+              <button onClick={resetPin}
+                className="px-3 py-2 bg-slate-100 rounded-lg text-sm font-semibold flex-shrink-0 hover:bg-slate-200">
+                취소
+              </button>
+            </div>
+            {pinMsg && (
+              <div className={"text-xs font-medium " + (pinMsg.ok ? "text-emerald-600" : "text-red-500")}>
+                {pinMsg.msg}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* 저장 */}
       <button onClick={handleSave}
         className={"w-full py-3.5 rounded-xl font-bold text-white shadow-lg transition-all active:scale-[0.98] " + (saved ? "bg-emerald-500" : "bg-gradient-to-r from-indigo-600 to-purple-600")}>
@@ -1108,6 +1291,11 @@ function App() {
   const [dark, setDark] = useState(false);
   const [fsize, setFsize] = useState(0);
   const [appLoading, setAppLoading] = useState(true);
+  const [locked, setLocked] = useState(() => {
+    const hasPin = !!localStorage.getItem("app_pin");
+    const unlocked = !!sessionStorage.getItem("pin_unlocked");
+    return hasPin && !unlocked;
+  });
   const dbRef = useRef(null); // v2: Firestore 참조
 
   const go = (v) => { setSelected(null); setView(v); };
@@ -1194,6 +1382,10 @@ function App() {
       setProblems(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) { console.error("Config apply error:", e); }
   };
+
+  if (locked) {
+    return <PinLock onUnlock={() => setLocked(false)} />;
+  }
 
   if (appLoading) {
     return (
@@ -1318,7 +1510,7 @@ function App() {
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">📐</div>
-            <h1 className="font-bold text-slate-800 text-sm">HW 수학 오답노트 byYoo</h1>
+            <h1 className="font-bold text-slate-800 text-sm">HW 수학 오답노트 byYHS</h1>
           </div>
           <div className="flex items-center gap-1">
             <button onClick={() => setFsize((n) => (n + 1) % 3)} title="글자 크기 조절"
