@@ -245,7 +245,7 @@ const MOCK = [
   },
 ];
 
-/* ─── TTS 헬퍼 ─── */
+/* ─── TTS 헬퍼 (v3: 여성 음성 우선 + 속도 개선) ─── */
 function useVoice() {
   const [speaking, setSpeaking] = useState(null);
   const [voices, setVoices] = useState([]);
@@ -260,17 +260,40 @@ function useVoice() {
     };
   }, []);
 
+  /* 한국어 여성 음성 우선 선택 (Google 한국의 최우선) */
+  const pickKoFemale = useCallback((voiceList) => {
+    const ko = voiceList.filter((v) => v.lang.startsWith("ko"));
+    if (ko.length === 0) return null;
+    // 1순위: Google 한국어 음성 (가장 자연스러움)
+    const google = ko.find((v) => v.name.toLowerCase().includes("google"));
+    if (google) return google;
+    // 2순위: 여성 음성 키워드 (플랫폼별)
+    const femaleHints = ["yuna","sora","sunhi","heami","jiyeon","minji","seoyeon","heera","female"];
+    const female = ko.find((v) => {
+      const n = (v.name + " " + (v.voiceURI || "")).toLowerCase();
+      return femaleHints.some((h) => n.includes(h));
+    });
+    if (female) return female;
+    // 3순위: 남성 키워드 제외한 음성
+    const maleHints = ["jihun","junwoo","male","hyunbin"];
+    const notMale = ko.find((v) => {
+      const n = (v.name + " " + (v.voiceURI || "")).toLowerCase();
+      return !maleHints.some((h) => n.includes(h));
+    });
+    return notMale || ko[0];
+  }, []);
+
   const speak = useCallback((text, id) => {
     window.speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = "ko-KR"; u.rate = 0.9;
-    const ko = voices.find((v) => v.lang.startsWith("ko"));
-    if (ko) u.voice = ko;
+    u.lang = "ko-KR"; u.rate = 1.1;
+    const picked = pickKoFemale(voices);
+    if (picked) u.voice = picked;
     u.onstart = () => setSpeaking(id);
     u.onend = () => setSpeaking(null);
     u.onerror = () => setSpeaking(null);
     window.speechSynthesis.speak(u);
-  }, [voices]);
+  }, [voices, pickKoFemale]);
 
   const stop = useCallback(() => { window.speechSynthesis.cancel(); setSpeaking(null); }, []);
   return { speaking, speak, stop };
@@ -757,6 +780,7 @@ function Library({ problems, onSelect }) {
   const [fU, setFU] = useState("all");
   const [fT, setFT] = useState("all");
   const [printMode, setPrintMode] = useState(false);
+  const [printStyle, setPrintStyle] = useState("large"); // "large" (디폴트) | "compact"
 
   const grades = useMemo(() => ["all", ...new Set(problems.map((p) => p.grade).filter(Boolean))], [problems]);
   const units = useMemo(() => ["all", ...new Set(problems.map((p) => p.unit).filter(Boolean))], [problems]);
@@ -775,38 +799,61 @@ function Library({ problems, onSelect }) {
     }).sort((a, b) => b.createdAt - a.createdAt);
   }, [problems, q, fG, fU, fT]);
 
-  useEffect(() => {
-    if (!printMode) return;
-    const timer = setTimeout(() => window.print(), 600);
-    const exit = () => setPrintMode(false);
-    window.addEventListener("afterprint", exit);
-    let iosFb = null;
-    const onFocus = () => { iosFb = setTimeout(exit, 300); };
-    const onVis = () => { if (document.visibilityState === "visible") { iosFb = setTimeout(exit, 300); } };
-    window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVis);
-    return () => { clearTimeout(timer); if (iosFb) clearTimeout(iosFb); window.removeEventListener("afterprint", exit); window.removeEventListener("focus", onFocus); document.removeEventListener("visibilitychange", onVis); };
-  }, [printMode]);
+  const doPrint = () => { setTimeout(() => window.print(), 400); };
+
 
   if (printMode) {
+    const isLarge = printStyle === "large";
     return (
       <div className="max-w-3xl mx-auto p-6 print-area" style={{background:"#fff",color:"#1e293b"}}>
-        <button onClick={() => setPrintMode(false)} className="mb-4 text-sm np flex items-center gap-1 hover:underline" style={{color:"#4f46e5"}}><Ic n="cl" sz={14} /> 돌아가기</button>
+        {/* 인쇄 옵션 바 (화면에서만 보임, 인쇄 시 숨김) */}
+        <div className="np mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <button onClick={() => setPrintMode(false)} className="text-sm flex items-center gap-1 hover:underline" style={{color:"#4f46e5"}}><Ic n="cl" sz={14} /> 돌아가기</button>
+            <button onClick={doPrint} className="px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl font-semibold text-sm shadow-md active:scale-[0.98] transition-transform flex items-center gap-2">
+              <Ic n="print" sz={16} cls="text-white" /> 출력하기
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-slate-600">출력 스타일:</span>
+            <button onClick={() => setPrintStyle("large")}
+              className={"px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors " + (isLarge ? "bg-indigo-600 text-white" : "bg-white border border-slate-300 text-slate-600 hover:bg-slate-100")}>
+              🖼 큰 이미지 (1문제/쪽)
+            </button>
+            <button onClick={() => setPrintStyle("compact")}
+              className={"px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors " + (!isLarge ? "bg-indigo-600 text-white" : "bg-white border border-slate-300 text-slate-600 hover:bg-slate-100")}>
+              📄 간결 (여러문제/쪽)
+            </button>
+          </div>
+          <div className="text-[11px] text-slate-500">
+            {isLarge ? "💡 문제 이미지를 크게 출력합니다. 도형·기호가 선명하게 보입니다." : "💡 여러 문제를 한 페이지에 모아 출력합니다."}
+          </div>
+        </div>
+
+        {/* 헤더 */}
         <div className="text-center mb-8 border-b-2 pb-6">
           <div className="text-3xl mb-2">📐</div>
           <h1 className="text-2xl font-bold" style={{color:"#1e293b"}}>NW_HW 수학 오답노트 byYoo</h1>
           <p className="text-sm mt-2" style={{color:"#64748b"}}>{fG !== "all" ? fG : "모든 학년"} · {fU !== "all" ? fU : "모든 단원"} · {list.length}문제 · {new Date().toLocaleDateString("ko-KR")}</p>
         </div>
+
+        {/* 문제 목록 */}
         {list.map((p, idx) => (
-          <div key={p.id} style={{ pageBreakInside: "avoid" }} className="mb-8 border-b pb-6">
-            <h2 className="text-lg font-bold mb-2" style={{color:"#1e293b"}}>{idx + 1}. {p.title}</h2>
+          <div key={p.id}
+            style={isLarge ? { pageBreakAfter: idx < list.length - 1 ? "always" : "auto" } : { pageBreakInside: "avoid" }}
+            className={isLarge ? "mb-6" : "mb-8 border-b pb-6"}>
+            <h2 className={isLarge ? "text-xl font-bold mb-3" : "text-lg font-bold mb-2"} style={{color:"#1e293b"}}>{idx + 1}. {p.title}</h2>
             <div className="flex flex-wrap gap-1 mb-2 text-xs">
               {p.grade && <span className="px-2 py-0.5 rounded" style={{background:"#e0e7ff",color:"#4f46e5"}}>{p.grade}</span>}
               {p.unit && <span className="px-2 py-0.5 rounded" style={{background:"#f3e8ff",color:"#7c3aed"}}>{p.unit}</span>}
               {p.difficulty && <span className="px-2 py-0.5 rounded" style={{background:"#f1f5f9"}}>난이도 {p.difficulty}</span>}
             </div>
-            <img src={p.problemImg} alt={p.title} className="w-full max-h-72 object-contain border rounded-xl mb-3" onError={(e) => { e.target.style.display="none"; }} />
-            {p.problemText && <p className="text-sm italic mb-2" style={{color:"#475569"}}>{p.problemText}</p>}
+            {/* 이미지: large 모드에서는 높이 제한 없이 최대 크기로 출력 */}
+            <img src={p.problemImg} alt={p.title}
+              className={"w-full object-contain border rounded-xl mb-3" + (isLarge ? "" : " max-h-72")}
+              style={isLarge ? { maxHeight: "50vh" } : {}}
+              onError={(e) => { e.target.style.display="none"; }} />
+            {p.problemText && <p className={isLarge ? "text-sm italic mb-3" : "text-sm italic mb-2"} style={{color:"#475569"}}>{p.problemText}</p>}
             {p.errorAnalysis && (
               <div className="p-3 border-2 rounded-xl mb-3 text-sm" style={{borderColor:"#fca5a5",background:"#fef2f2",color:"#991b1b"}}>
                 ⚠ 오류{p.errorStep ? " ("+p.errorStep+"단계)" : ""}: {p.errorAnalysis}
@@ -1225,6 +1272,7 @@ function App() {
           @page{margin:15mm 10mm}
           .print-area,.print-area *{color-adjust:exact!important;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}
           .print-area{background:#fff!important;color:#1e293b!important}
+          .print-area img:not(.max-h-72){max-height:none!important;max-width:100%!important}
           .dm{background:#f8fafc!important;color:#334155!important}
           .dm *{text-shadow:none!important;box-shadow:none!important}
           .dm .bg-slate-50{background:#f8fafc!important}
