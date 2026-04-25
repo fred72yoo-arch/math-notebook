@@ -372,7 +372,7 @@ function PinLock({ onUnlock }) {
 }
 
 /* ─── 단계별 풀이 ─── */
-function StepByStep({ steps, errorStep, onReanalyze, reanalyzing }) {
+function StepByStep({ steps, errorStep, onReanalyze, reanalyzing, finalAnswer }) {
   const [shown, setShown] = useState(1);
   const [showAll, setShowAll] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
@@ -445,7 +445,7 @@ function StepByStep({ steps, errorStep, onReanalyze, reanalyzing }) {
       {vis === steps.length && (
         <>
           {/* 최종 정답 강조 박스 */}
-          {steps.length > 0 && steps[steps.length - 1].math && (
+          {steps.length > 0 && (finalAnswer || steps[steps.length - 1].math) && (
             <div className="p-4 rounded-xl border-2 border-emerald-400 bg-gradient-to-r from-emerald-50 to-teal-50"
               style={{ animation: "fadeInUp 0.4s ease-out" }}>
               <div className="flex items-center gap-2 mb-2">
@@ -453,9 +453,9 @@ function StepByStep({ steps, errorStep, onReanalyze, reanalyzing }) {
                 <span className="font-bold text-emerald-800">최종 정답</span>
               </div>
               <div className="px-4 py-3 bg-white rounded-lg border border-emerald-200 text-center">
-                <span className="text-lg font-bold text-emerald-700"><MathText text={steps[steps.length - 1].math} /></span>
+                <span className="text-lg font-bold text-emerald-700"><MathText text={finalAnswer || steps[steps.length - 1].math} /></span>
               </div>
-              <div className="mt-2 text-[11px] italic text-slate-400 text-center">아직 AI 풀이는 오류가 있을 수 있습니다. 따라서 틀린 문제의 정답을 먼저 확인하세요.</div>
+              <div className="mt-2 text-xs italic text-slate-400 text-center">아직 AI 풀이는 오류가 있을 수 있습니다. 따라서 틀린 문제의 정답을 먼저 확인하세요.</div>
             </div>
           )}
           <div className="flex items-center justify-center gap-3 py-3">
@@ -482,31 +482,49 @@ function DrawCanvas({ onClose }) {
   const [drawing, setDrawing] = useState(false);
   const [color, setColor] = useState("#1e293b");
   const [lineW, setLineW] = useState(3);
-  const [tool, setTool] = useState("pen"); // pen | eraser
+  const [tool, setTool] = useState("pen"); // pen | eraser | scroll
   const lastPos = useRef(null);
+
+  const isScroll = tool === "scroll";
 
   useEffect(() => {
     const c = canvasRef.current;
     if (!c) return;
-    const resize = () => { c.width = window.innerWidth; c.height = window.innerHeight; };
+    const resize = () => {
+      const oldData = c.width > 0 && c.height > 0 ? c.getContext("2d").getImageData(0, 0, c.width, c.height) : null;
+      c.width = window.innerWidth;
+      c.height = Math.max(document.documentElement.scrollHeight, window.innerHeight);
+      if (oldData) c.getContext("2d").putImageData(oldData, 0, 0);
+    };
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
 
+  /* 스크롤 모드 전환 시 body overflow 제어 */
+  useEffect(() => {
+    if (isScroll) {
+      document.body.style.overflow = "";
+    } else {
+      document.body.style.overflow = "hidden";
+    }
+    return () => { document.body.style.overflow = ""; };
+  }, [isScroll]);
+
   const getPos = (e) => {
     const t = e.touches ? e.touches[0] : e;
-    return { x: t.clientX, y: t.clientY };
+    return { x: t.pageX, y: t.pageY };
   };
 
   const startDraw = (e) => {
+    if (isScroll) return;
     e.preventDefault();
     setDrawing(true);
     lastPos.current = getPos(e);
   };
 
   const draw = (e) => {
-    if (!drawing) return;
+    if (!drawing || isScroll) return;
     e.preventDefault();
     const c = canvasRef.current;
     const ctx = c.getContext("2d");
@@ -546,12 +564,11 @@ function DrawCanvas({ onClose }) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50" style={{ touchAction: "none" }}>
-      {/* 도구 바 */}
+    <>
+      {/* 도구 바 (항상 상단 고정) */}
       <div className="fixed top-0 left-0 right-0 z-[60] bg-white/95 backdrop-blur-sm border-b border-slate-200 shadow-md px-3 py-2">
         <div className="flex items-center justify-between gap-2 max-w-3xl mx-auto">
-          <div className="flex items-center gap-1.5">
-            {/* 펜/지우개 전환 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             <button onClick={() => setTool("pen")}
               className={"px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors " + (tool === "pen" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600")}>
               ✏️ 펜
@@ -560,42 +577,55 @@ function DrawCanvas({ onClose }) {
               className={"px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors " + (tool === "eraser" ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600")}>
               🧽 지우개
             </button>
-            {/* 색상 선택 */}
+            <button onClick={() => setTool("scroll")}
+              className={"px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors " + (isScroll ? "bg-amber-500 text-white" : "bg-slate-100 text-slate-600")}>
+              ✋ 스크롤
+            </button>
             {tool === "pen" && colors.map((co) => (
               <button key={co.c} onClick={() => setColor(co.c)} title={co.n}
                 className={"w-7 h-7 rounded-full border-2 transition-transform " + (color === co.c ? "scale-110 border-indigo-500 shadow-md" : "border-slate-300")}
                 style={{ background: co.c }} />
             ))}
-            {/* 굵기 */}
-            <select value={lineW} onChange={(e) => setLineW(Number(e.target.value))}
-              className="text-xs px-1.5 py-1 rounded-lg border border-slate-300 bg-white">
-              <option value={2}>가늘게</option>
-              <option value={3}>보통</option>
-              <option value={5}>굵게</option>
-              <option value={8}>매우 굵게</option>
-            </select>
+            {(tool === "pen" || tool === "eraser") && (
+              <select value={lineW} onChange={(e) => setLineW(Number(e.target.value))}
+                className="text-xs px-1.5 py-1 rounded-lg border border-slate-300 bg-white">
+                <option value={2}>가늘게</option>
+                <option value={3}>보통</option>
+                <option value={5}>굵게</option>
+                <option value={8}>매우 굵게</option>
+              </select>
+            )}
           </div>
           <div className="flex items-center gap-1.5">
             <button onClick={clearAll} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-red-50 text-red-600 hover:bg-red-100">
-              전체 지우기
+              지우기
             </button>
             <button onClick={onClose} className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700">
               ✕ 닫기
             </button>
           </div>
         </div>
+        {isScroll && (
+          <div className="text-center text-[11px] text-amber-600 font-semibold mt-1">
+            스크롤 모드 — 화면을 움직여 필기 공간을 확보하세요
+          </div>
+        )}
       </div>
 
-      {/* 투명 캔버스 */}
+      {/* 투명 캔버스 (페이지 전체 크기) */}
       <canvas ref={canvasRef}
-        className="absolute inset-0 cursor-crosshair"
-        style={{ touchAction: "none" }}
+        className="absolute top-0 left-0 z-50"
+        style={{
+          touchAction: isScroll ? "auto" : "none",
+          pointerEvents: isScroll ? "none" : "auto",
+          cursor: isScroll ? "default" : "crosshair",
+        }}
         onPointerDown={startDraw}
         onPointerMove={draw}
         onPointerUp={endDraw}
         onPointerLeave={endDraw}
         onPointerCancel={endDraw} />
-    </div>
+    </>
   );
 }
 
@@ -681,6 +711,7 @@ function UploadView({ onSave, onCancel }) {
         problemText: result.problemText || "",
         errorStep: result.errorStep || null, errorAnalysis: result.errorAnalysis || null,
         solutionSteps: result.solutionSteps || [],
+        finalAnswer: result.finalAnswer || "",
         keyConcepts: result.keyConcepts || [], keyFormulas: result.keyFormulas || [],
         tip: result.tip || "", notes: "",
         bookmarked: false, mastered: false,
@@ -832,6 +863,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
       errorStep: reResult.errorStep,
       errorAnalysis: reResult.errorAnalysis,
       solutionSteps: reResult.solutionSteps || problem.solutionSteps,
+      finalAnswer: reResult.finalAnswer || problem.finalAnswer,
       keyConcepts: reResult.keyConcepts || problem.keyConcepts,
       keyFormulas: reResult.keyFormulas || problem.keyFormulas,
       tip: reResult.tip || problem.tip,
@@ -841,11 +873,14 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
   };
 
   /* 정답 비교 헬퍼 */
-  const getLastMath = (steps) => {
+  const getAnswer = (data, steps) => {
+    if (data && data.finalAnswer) return data.finalAnswer;
     if (!steps || steps.length === 0) return "";
     return steps[steps.length - 1].math || "";
   };
-  const isSameAnswer = reResult ? getLastMath(problem.solutionSteps) === getLastMath(reResult.solutionSteps) : true;
+  const oldAnswer = getAnswer(problem, problem.solutionSteps);
+  const newAnswer = reResult ? getAnswer(reResult, reResult.solutionSteps) : "";
+  const isSameAnswer = reResult ? oldAnswer === newAnswer : true;
 
   const saveNotes = () => {
     upd({ ...problem, notes });
@@ -963,7 +998,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
       {(mode !== "review" || showSol) && problem.solutionSteps && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-3"><Ic n="pen" sz={15} cls="text-emerald-600" /><span className="font-semibold">올바른 풀이</span></div>
-          <StepByStep key={problem.id} steps={problem.solutionSteps} errorStep={problem.errorStep} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} />
+          <StepByStep key={problem.id} steps={problem.solutionSteps} errorStep={problem.errorStep} onReanalyze={handleReanalyze} reanalyzing={reanalyzing} finalAnswer={problem.finalAnswer} />
         </div>
       )}
 
@@ -989,11 +1024,11 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="px-3 py-2 bg-white rounded-lg border">
                 <div className="text-slate-500 mb-1">기존 정답</div>
-                <div className="font-bold text-slate-800"><MathText text={getLastMath(problem.solutionSteps)} /></div>
+                <div className="font-bold text-slate-800"><MathText text={oldAnswer} /></div>
               </div>
               <div className="px-3 py-2 bg-white rounded-lg border">
                 <div className="text-slate-500 mb-1">새 정답</div>
-                <div className="font-bold text-indigo-700"><MathText text={getLastMath(reResult.solutionSteps)} /></div>
+                <div className="font-bold text-indigo-700"><MathText text={newAnswer} /></div>
               </div>
             </div>
           </div>
