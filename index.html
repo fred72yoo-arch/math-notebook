@@ -81,33 +81,132 @@ function Ic({ n, sz = 20, cls = "" }) {
 /* ─── 유틸 ─── */
 const uid = () => "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
 
-/* ─── 수학 텍스트 → KaTeX 렌더링 (v2 추가) ─── */
+/* ─── 수학 텍스트 → KaTeX 렌더링 (v3 업그레이드: 기호 확장 + 한글 지원) ─── */
 function textToLatex(text) {
   if (!text) return text;
   let s = text;
-  // √(...) → \sqrt{...}
-  s = s.replace(/√\(([^)]+)\)/g, '\\sqrt{$1}');
-  // 단독 √ 뒤 숫자/문자
+
+  /* 1단계: √ 루트 처리 (다른 기호보다 먼저) */
+  // √(...)  — 중첩 괄호 지원: 가장 바깥 괄호 쌍 매칭
+  s = s.replace(/√\(([^()]*(?:\([^()]*\))*[^()]*)\)/g, '\\sqrt{$1}');
+  // √ 뒤 여러 자리 숫자: √12, √144
   s = s.replace(/√(\d+)/g, '\\sqrt{$1}');
+  // √ 뒤 단일 문자: √a, √x
   s = s.replace(/√([a-zA-Z])/g, '\\sqrt{$1}');
-  // ± → \pm
-  s = s.replace(/±/g, '\\pm');
-  // ² ³ → ^2 ^3
-  s = s.replace(/²/g, '^2');
-  s = s.replace(/³/g, '^3');
-  // × → \times
-  s = s.replace(/×/g, '\\times');
-  // ÷ → \div
-  s = s.replace(/÷/g, '\\div');
-  // ≈ → \approx
-  s = s.replace(/≈/g, '\\approx');
-  // ≠ → \neq
-  s = s.replace(/≠/g, '\\neq');
-  // ≤ ≥ → \leq \geq
-  s = s.replace(/≤/g, '\\leq');
-  s = s.replace(/≥/g, '\\geq');
-  // π → \pi
-  s = s.replace(/π/g, '\\pi');
+  // 단독 √ (뒤에 아무것도 없는 경우)
+  s = s.replace(/√/g, '\\sqrt{}');
+
+  /* 2단계: 수학 함수명 (한글 래핑 전에 처리) */
+  s = s.replace(/\bsin\b/g, '\\sin');
+  s = s.replace(/\bcos\b/g, '\\cos');
+  s = s.replace(/\btan\b/g, '\\tan');
+  s = s.replace(/\blog\b/g, '\\log');
+  s = s.replace(/\bln\b/g, '\\ln');
+  s = s.replace(/\blim\b/g, '\\lim');
+  s = s.replace(/\bmax\b/g, '\\max');
+  s = s.replace(/\bmin\b/g, '\\min');
+
+  /* 3단계: 거듭제곱 · 아래첨자 (유니코드 위첨자/아래첨자) */
+  s = s.replace(/⁰/g, '^{0}');
+  s = s.replace(/¹/g, '^{1}');
+  s = s.replace(/²/g, '^{2}');
+  s = s.replace(/³/g, '^{3}');
+  s = s.replace(/⁴/g, '^{4}');
+  s = s.replace(/⁵/g, '^{5}');
+  s = s.replace(/⁶/g, '^{6}');
+  s = s.replace(/⁷/g, '^{7}');
+  s = s.replace(/⁸/g, '^{8}');
+  s = s.replace(/⁹/g, '^{9}');
+  s = s.replace(/ⁿ/g, '^{n}');
+  s = s.replace(/₀/g, '_{0}');
+  s = s.replace(/₁/g, '_{1}');
+  s = s.replace(/₂/g, '_{2}');
+  s = s.replace(/₃/g, '_{3}');
+  s = s.replace(/₄/g, '_{4}');
+  s = s.replace(/₅/g, '_{5}');
+  s = s.replace(/₆/g, '_{6}');
+  s = s.replace(/₇/g, '_{7}');
+  s = s.replace(/₈/g, '_{8}');
+  s = s.replace(/₉/g, '_{9}');
+
+  /* 4단계: 연산자 · 관계 기호 */
+  s = s.replace(/±/g, '\\pm ');
+  s = s.replace(/∓/g, '\\mp ');
+  s = s.replace(/×/g, '\\times ');
+  s = s.replace(/÷/g, '\\div ');
+  s = s.replace(/·/g, '\\cdot ');
+  s = s.replace(/≈/g, '\\approx ');
+  s = s.replace(/≠/g, '\\neq ');
+  s = s.replace(/≤/g, '\\leq ');
+  s = s.replace(/≥/g, '\\geq ');
+  s = s.replace(/≡/g, '\\equiv ');
+
+  /* 5단계: 도형 · 기하 기호 */
+  s = s.replace(/∠/g, '\\angle ');
+  s = s.replace(/°/g, '^{\\circ}');
+  s = s.replace(/△/g, '\\triangle ');
+  s = s.replace(/□/g, '\\square ');
+  s = s.replace(/∥/g, '\\parallel ');
+  s = s.replace(/⊥/g, '\\perp ');
+  s = s.replace(/∽/g, '\\sim ');
+  s = s.replace(/≅/g, '\\cong ');
+  s = s.replace(/⊙/g, '\\odot ');
+
+  /* 6단계: 집합 · 논리 기호 */
+  s = s.replace(/∈/g, '\\in ');
+  s = s.replace(/∉/g, '\\notin ');
+  s = s.replace(/⊂/g, '\\subset ');
+  s = s.replace(/⊃/g, '\\supset ');
+  s = s.replace(/⊆/g, '\\subseteq ');
+  s = s.replace(/⊇/g, '\\supseteq ');
+  s = s.replace(/∪/g, '\\cup ');
+  s = s.replace(/∩/g, '\\cap ');
+  s = s.replace(/∅/g, '\\emptyset ');
+  s = s.replace(/∀/g, '\\forall ');
+  s = s.replace(/∃/g, '\\exists ');
+
+  /* 7단계: 그리스 문자 */
+  s = s.replace(/α/g, '\\alpha ');
+  s = s.replace(/β/g, '\\beta ');
+  s = s.replace(/γ/g, '\\gamma ');
+  s = s.replace(/δ/g, '\\delta ');
+  s = s.replace(/θ/g, '\\theta ');
+  s = s.replace(/λ/g, '\\lambda ');
+  s = s.replace(/μ/g, '\\mu ');
+  s = s.replace(/σ/g, '\\sigma ');
+  s = s.replace(/φ/g, '\\varphi ');
+  s = s.replace(/ω/g, '\\omega ');
+  s = s.replace(/Σ/g, '\\Sigma ');
+  s = s.replace(/Δ/g, '\\Delta ');
+  s = s.replace(/Ω/g, '\\Omega ');
+  s = s.replace(/π/g, '\\pi ');
+
+  /* 8단계: 기타 수학 기호 */
+  s = s.replace(/∞/g, '\\infty ');
+  s = s.replace(/∴/g, '\\therefore ');
+  s = s.replace(/∵/g, '\\because ');
+  s = s.replace(/→/g, '\\rightarrow ');
+  s = s.replace(/←/g, '\\leftarrow ');
+  s = s.replace(/↔/g, '\\leftrightarrow ');
+  s = s.replace(/⇒/g, '\\Rightarrow ');
+  s = s.replace(/⇔/g, '\\Leftrightarrow ');
+  s = s.replace(/∫/g, '\\int ');
+  s = s.replace(/∑/g, '\\sum ');
+  s = s.replace(/∏/g, '\\prod ');
+
+  /* 9단계: 유니코드 분수 */
+  s = s.replace(/½/g, '\\frac{1}{2}');
+  s = s.replace(/⅓/g, '\\frac{1}{3}');
+  s = s.replace(/¼/g, '\\frac{1}{4}');
+  s = s.replace(/⅔/g, '\\frac{2}{3}');
+  s = s.replace(/¾/g, '\\frac{3}{4}');
+  s = s.replace(/⅕/g, '\\frac{1}{5}');
+  s = s.replace(/⅙/g, '\\frac{1}{6}');
+
+  /* 10단계: 한글을 \text{}로 감싸기 (KaTeX 호환) */
+  // 한글 + 사이 공백/조사를 하나의 \text{} 블록으로 묶음
+  s = s.replace(/([\uAC00-\uD7AF\u3131-\u3163\u1100-\u11FF]+(?:[\s,.:;·~]?[\uAC00-\uD7AF\u3131-\u3163\u1100-\u11FF]+)*)/g, '\\text{$1}');
+
   return s;
 }
 
@@ -123,6 +222,54 @@ function MathText({ text }) {
   if (!text) return null;
   if (typeof katex === "undefined") return <span>{text}</span>;
   return <span ref={ref} />;
+}
+
+/* ─── 도형 설명 포함 문제 텍스트 렌더링 (v3 추가) ─── */
+function ProblemTextBlock({ text }) {
+  if (!text) return null;
+
+  // [도형 설명] 마커 감지
+  const marker = "[도형 설명]";
+  const idx = text.indexOf(marker);
+
+  if (idx === -1) {
+    // 도형 설명 없음 → 일반 텍스트
+    return <div className="text-sm text-slate-800 leading-relaxed"><MathText text={text} /></div>;
+  }
+
+  // 도형 설명 부분과 문제 부분 분리
+  const afterMarker = text.slice(idx + marker.length);
+  // 빈 줄(\n\n)로 도형 설명과 문제 분리, 없으면 전체가 도형 설명
+  const splitIdx = afterMarker.indexOf("\n\n");
+  let figureDesc, questionPart;
+  if (splitIdx !== -1) {
+    figureDesc = afterMarker.slice(0, splitIdx).trim();
+    questionPart = afterMarker.slice(splitIdx + 2).trim();
+  } else {
+    figureDesc = afterMarker.trim();
+    questionPart = "";
+  }
+
+  // 마커 앞에 텍스트가 있는 경우 (드물지만)
+  const beforeMarker = text.slice(0, idx).trim();
+
+  return (
+    <div className="space-y-3">
+      {beforeMarker && <div className="text-sm text-slate-800 leading-relaxed"><MathText text={beforeMarker} /></div>}
+      <div className="p-3 bg-blue-50 border-2 border-blue-200 rounded-xl">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-base">📐</span>
+          <span className="text-xs font-bold text-blue-700">아래 설명을 읽고 도형을 직접 그려보세요</span>
+        </div>
+        <div className="text-sm text-blue-900 leading-relaxed whitespace-pre-line">{figureDesc}</div>
+      </div>
+      {questionPart && (
+        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="text-sm text-slate-800 leading-relaxed font-medium"><MathText text={questionPart} /></div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─── 이미지 압축 (v2 추가) ─── */
@@ -1036,7 +1183,11 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
         <div className="flex items-center gap-2 mb-3"><Ic n="file" sz={15} cls="text-indigo-600" /><span className="font-semibold text-slate-800">문제</span></div>
         <img src={problem.problemImg} alt="문제 이미지" className="w-full rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
-        {problem.problemText && <p className="mt-3 text-sm text-slate-600 italic">{problem.problemText}</p>}
+        {problem.problemText && (
+          problem.type === "similar" && problem.problemText.includes("[도형 설명]")
+            ? <div className="mt-3"><ProblemTextBlock text={problem.problemText} /></div>
+            : <p className="mt-3 text-sm text-slate-600 italic">{problem.problemText}</p>
+        )}
       </div>
 
       {mode === "review" ? (
@@ -1274,10 +1425,8 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
           </div>
 
           <div className="p-4 space-y-3">
-            {/* 문제 텍스트 */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
-              <div className="text-sm text-slate-800 leading-relaxed"><MathText text={sp.problemText || ""} /></div>
-            </div>
+            {/* 문제 텍스트 (도형 설명 포함 시 자동 분리) */}
+            <ProblemTextBlock text={sp.problemText || ""} />
 
             {/* 풀어보기 + 정답 확인 버튼 */}
             <div className="flex gap-2">
@@ -1430,7 +1579,27 @@ function Library({ problems, onSelect }) {
               className={"w-full object-contain border rounded-xl mb-3" + (isLarge ? "" : " max-h-72")}
               style={isLarge ? { maxHeight: "50vh" } : {}}
               onError={(e) => { e.target.style.display="none"; }} />
-            {p.problemText && <p className={isLarge ? "text-sm italic mb-3" : "text-sm italic mb-2"} style={{color:"#475569"}}>{p.problemText}</p>}
+            {p.problemText && (
+              p.problemText.includes("[도형 설명]") ? (
+                <div className="mb-3">
+                  {(() => {
+                    const mk = "[도형 설명]";
+                    const mi = p.problemText.indexOf(mk);
+                    const after = p.problemText.slice(mi + mk.length);
+                    const si = after.indexOf("\n\n");
+                    const fig = si !== -1 ? after.slice(0, si).trim() : after.trim();
+                    const q = si !== -1 ? after.slice(si + 2).trim() : "";
+                    return (<>
+                      <div className="p-2 border-2 rounded-lg mb-2 text-sm" style={{borderColor:"#93c5fd",background:"#eff6ff",color:"#1e40af"}}>
+                        <div className="font-bold text-xs mb-1">📐 도형을 그려보세요</div>
+                        <div style={{whiteSpace:"pre-line"}}>{fig}</div>
+                      </div>
+                      {q && <p className="text-sm" style={{color:"#1e293b"}}><MathText text={q} /></p>}
+                    </>);
+                  })()}
+                </div>
+              ) : <p className={isLarge ? "text-sm italic mb-3" : "text-sm italic mb-2"} style={{color:"#475569"}}>{p.problemText}</p>
+            )}
             {p.errorAnalysis && (
               <div className="p-3 border-2 rounded-xl mb-3 text-sm" style={{borderColor:"#fca5a5",background:"#fef2f2",color:"#991b1b"}}>
                 ⚠ 오류{p.errorStep ? " ("+p.errorStep+"단계)" : ""}: {p.errorAnalysis}
