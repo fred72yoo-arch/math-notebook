@@ -194,6 +194,39 @@ async function analyzeWithAI(base64, mimeType) {
   return JSON.parse(clean);
 }
 
+/* ─── 유사 문제 생성 (Vercel 프록시 경유) ─── */
+async function generateSimilar(problem) {
+  const apiKey = localStorage.getItem("anthropic_api_key");
+  if (!apiKey) throw new Error("API 키가 설정되지 않았습니다.");
+
+  const context = [
+    "제목: " + (problem.title || ""),
+    "학년: " + (problem.grade || ""),
+    "단원: " + (problem.unit || ""),
+    "난이도: " + (problem.difficulty || ""),
+    "문제: " + (problem.problemText || ""),
+    "핵심 개념: " + (problem.keyConcepts || []).join(", "),
+    "핵심 공식: " + (problem.keyFormulas || []).join(", "),
+    "태그: " + (problem.tags || []).join(", "),
+  ].join("\n");
+
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiKey, mode: "generate_similar", problemContext: context }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || "유사 문제 생성 실패 (" + res.status + ")");
+  }
+
+  const data = await res.json();
+  const text = data.content.filter((c) => c.type === "text").map((c) => c.text).join("");
+  const clean = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  return JSON.parse(clean);
+}
+
 /* ─── 데모용 목업 데이터 ─── */
 const MOCK = [
   {
@@ -813,7 +846,7 @@ function UploadView({ onSave, onCancel }) {
 }
 
 /* ─── 문제 상세 ─── */
-function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
+function Detail({ problem: initP, onClose, onUpdate, onDelete, onSave }) {
   const [problem, setProblem] = useState(initP);
   const [mode, setMode] = useState("view");
   const [showSol, setShowSol] = useState(false);
@@ -825,8 +858,14 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
   const [reResult, setReResult] = useState(null);
   const [reError, setReError] = useState("");
   const [reTab, setReTab] = useState("new"); // "old" | "new"
+  // 유사 문제 상태
+  const [simLoading, setSimLoading] = useState(false);
+  const [simProblems, setSimProblems] = useState(null);
+  const [simError, setSimError] = useState("");
+  const [simRevealed, setSimRevealed] = useState({}); // {0: true, 1: true}
+  const [simDrawIdx, setSimDrawIdx] = useState(null); // 풀어보기 중인 문제 index
 
-  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); }, [initP.id]);
+  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); }, [initP.id]);
   useEffect(() => { return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); window.speechSynthesis.cancel(); }; }, []);
 
   const { speaking: speakingErr, speak: speakErr, stop: stopErr } = useVoice();
@@ -881,6 +920,50 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
   const oldAnswer = getAnswer(problem, problem.solutionSteps);
   const newAnswer = reResult ? getAnswer(reResult, reResult.solutionSteps) : "";
   const isSameAnswer = reResult ? oldAnswer === newAnswer : true;
+
+  /* 유사 문제 생성 */
+  const handleGenerateSimilar = async () => {
+    setSimLoading(true); setSimError(""); setSimProblems(null); setSimRevealed({}); setSimDrawIdx(null);
+    try {
+      const result = await generateSimilar(problem);
+      if (result.problems && result.problems.length > 0) {
+        setSimProblems(result.problems);
+      } else {
+        setSimError("유사 문제를 생성하지 못했습니다.");
+      }
+    } catch (e) {
+      setSimError("유사 문제 생성 실패: " + e.message);
+    }
+    setSimLoading(false);
+  };
+
+  /* 유사 문제 라이브러리 저장 */
+  const handleSaveSimilar = (sp, idx) => {
+    const newProblem = {
+      id: uid(),
+      type: "similar",
+      parentId: problem.id,
+      parentTitle: problem.title,
+      title: "[유사] " + (sp.title || ""),
+      grade: sp.grade || problem.grade,
+      unit: sp.unit || problem.unit,
+      difficulty: sp.difficulty || problem.difficulty,
+      tags: sp.tags || problem.tags || [],
+      problemImg: problem.problemImg,
+      solutionImg: null,
+      problemText: sp.problemText || "",
+      errorStep: null, errorAnalysis: null,
+      solutionSteps: sp.solutionSteps || [],
+      finalAnswer: sp.finalAnswer || "",
+      keyConcepts: sp.keyConcepts || [],
+      keyFormulas: sp.keyFormulas || [],
+      tip: sp.tip || "",
+      notes: "",
+      bookmarked: false, mastered: false,
+      createdAt: Date.now(), reviewCount: 0, lastReviewed: null,
+    };
+    onSave(newProblem);
+  };
 
   const saveNotes = () => {
     upd({ ...problem, notes });
@@ -940,6 +1023,11 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
           {(problem.tags || []).map((t, i) => <span key={i} className="px-2 py-1 rounded-full bg-slate-100 text-slate-700">#{t}</span>)}
         </div>
         {problem.reviewCount > 0 && <div className="mt-3 text-xs text-slate-500">복습 {problem.reviewCount}회{problem.lastReviewed && (" · 마지막: " + new Date(problem.lastReviewed).toLocaleDateString("ko-KR"))}</div>}
+        {problem.type === "similar" && problem.parentTitle && (
+          <div className="mt-2 px-3 py-1.5 bg-purple-50 rounded-lg text-xs text-purple-700">
+            🎲 원본 문제: <span className="font-semibold">{problem.parentTitle}</span>
+          </div>
+        )}
       </div>
 
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
@@ -959,9 +1047,16 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
               <Ic n="eye" sz={16} /> 풀이 확인
             </button>
           ) : (
-            <div className="flex gap-2">
-              <button onClick={() => { upd({ ...problem, mastered: true }); setMode("view"); }} className="flex-1 py-2 rounded-xl bg-emerald-500 text-white font-semibold text-sm active:scale-[0.98] transition-transform">이해했어요!</button>
-              <button onClick={() => setMode("view")} className="flex-1 py-2 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-[0.98] transition-transform">다시 봐야겠어요</button>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <button onClick={() => setMode("view")} className="flex-1 py-2 rounded-xl bg-amber-500 text-white font-semibold text-sm active:scale-[0.98] transition-transform">다시 봐야겠어요</button>
+                <button onClick={() => { upd({ ...problem, mastered: true }); setMode("view"); }} className="flex-1 py-2 rounded-xl bg-emerald-500 text-white font-semibold text-sm active:scale-[0.98] transition-transform">이해했어요!</button>
+              </div>
+              <button onClick={handleGenerateSimilar} disabled={simLoading}
+                className={"w-full py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 transition-colors " +
+                  (simLoading ? "bg-purple-100 text-purple-500 animate-pulse" : "bg-gradient-to-r from-purple-500 to-indigo-500 text-white active:scale-[0.98]")}>
+                {simLoading ? <><span className="animate-spin">⟳</span> 생성 중...</> : "🎲 비슷한 유형 문제 풀기"}
+              </button>
             </div>
           )}
         </div>
@@ -1143,8 +1238,76 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete }) {
         </div>
       </div>
 
+      {/* 유사 문제 에러 */}
+      {simError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-3 text-sm flex items-center justify-between">
+          <span className="text-red-700">⚠️ {simError}</span>
+          <button onClick={() => setSimError("")} className="text-xs text-red-500 px-2 py-1 rounded hover:bg-red-100">닫기</button>
+        </div>
+      )}
+
+      {/* 유사 문제 로딩 */}
+      {simLoading && (
+        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-center gap-3">
+          <span className="animate-spin text-lg">⟳</span>
+          <div>
+            <div className="font-semibold text-purple-700 text-sm">유사 문제 생성 중...</div>
+            <div className="text-xs text-purple-500">AI가 비슷한 유형의 문제 2개를 만들고 있습니다 (15~30초)</div>
+          </div>
+        </div>
+      )}
+
+      {/* 유사 문제 표시 */}
+      {simProblems && simProblems.map((sp, idx) => (
+        <div key={idx} className="bg-white rounded-2xl shadow-sm border-2 border-purple-200 overflow-hidden">
+          <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-indigo-50 border-b border-purple-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-6 h-6 rounded-full bg-purple-600 text-white flex items-center justify-center text-xs font-bold">{idx + 1}</span>
+                <span className="font-bold text-sm text-purple-800">{sp.title || ("유사 문제 " + (idx + 1))}</span>
+              </div>
+              {sp.difficulty && <span className={"text-[10px] px-2 py-0.5 rounded-full font-semibold " + (sp.difficulty === "상" ? "bg-red-100 text-red-700" : sp.difficulty === "중" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700")}>난이도 {sp.difficulty}</span>}
+            </div>
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* 문제 텍스트 */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="text-sm text-slate-800 leading-relaxed"><MathText text={sp.problemText || ""} /></div>
+            </div>
+
+            {/* 풀어보기 + 정답 확인 버튼 */}
+            <div className="flex gap-2">
+              <button onClick={() => setSimDrawIdx(simDrawIdx === idx ? null : idx)}
+                className={"flex-1 py-2.5 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 transition-colors " +
+                  (simDrawIdx === idx ? "bg-amber-500 text-white" : "bg-white border-2 border-amber-300 text-amber-700 hover:bg-amber-50")}>
+                {simDrawIdx === idx ? "✏️ 필기 중..." : "✏️ 풀어보기"}
+              </button>
+              {!simRevealed[idx] ? (
+                <button onClick={() => setSimRevealed((p) => ({ ...p, [idx]: true }))}
+                  className="flex-1 py-2.5 rounded-xl bg-white border-2 border-emerald-300 text-emerald-700 font-semibold text-sm hover:bg-emerald-50 flex items-center justify-center gap-1.5">
+                  <Ic n="eye" sz={14} /> 정답 확인
+                </button>
+              ) : (
+                <button onClick={() => handleSaveSimilar(sp, idx)}
+                  className="flex-1 py-2.5 rounded-xl bg-white border-2 border-indigo-300 text-indigo-700 font-semibold text-sm hover:bg-indigo-50 flex items-center justify-center gap-1.5">
+                  💾 라이브러리 저장
+                </button>
+              )}
+            </div>
+
+            {/* 정답/풀이 (접힘) */}
+            {simRevealed[idx] && (
+              <div className="space-y-2 pt-2 border-t border-slate-200">
+                <StepByStep steps={sp.solutionSteps || []} errorStep={null} finalAnswer={sp.finalAnswer} />
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
       {/* 투명 필기 캔버스 */}
-      {drawMode && <DrawCanvas onClose={() => setDrawMode(false)} />}
+      {(drawMode || simDrawIdx !== null) && <DrawCanvas onClose={() => { setDrawMode(false); setSimDrawIdx(null); }} />}
     </div>
   );
 }
@@ -1161,9 +1324,10 @@ function Card({ p, onClick }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1">
             <h3 className="font-semibold text-slate-800 text-sm group-hover:text-indigo-600 line-clamp-2">{p.title}</h3>
-            <span className="flex-shrink-0">{p.bookmarked && "🔖"}{p.mastered && "✅"}</span>
+            <span className="flex-shrink-0">{p.type === "similar" && "🎲"}{p.bookmarked && "🔖"}{p.mastered && "✅"}</span>
           </div>
           <div className="flex flex-wrap gap-1 mt-1.5">
+            {p.type === "similar" && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">유사</span>}
             {p.grade && <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">{p.grade}</span>}
             {p.unit && <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">{p.unit}</span>}
           </div>
@@ -1195,6 +1359,8 @@ function Library({ problems, onSelect }) {
       if (fT === "bookmark" && !p.bookmarked) return false;
       if (fT === "unmastered" && p.mastered) return false;
       if (fT === "mastered" && !p.mastered) return false;
+      if (fT === "similar" && p.type !== "similar") return false;
+      if (fT === "original" && p.type === "similar") return false;
       if (q) {
         const h = [p.title, p.unit, p.problemText, ...(p.tags || [])].join(" ").toLowerCase();
         if (!h.includes(q.toLowerCase())) return false;
@@ -1298,6 +1464,7 @@ function Library({ problems, onSelect }) {
           { k: "bookmark", l: "🔖 북마크", c: problems.filter((p) => p.bookmarked).length },
           { k: "unmastered", l: "❗ 미마스터", c: problems.filter((p) => !p.mastered).length },
           { k: "mastered", l: "✅ 마스터", c: problems.filter((p) => p.mastered).length },
+          { k: "similar", l: "🎲 유사문제", c: problems.filter((p) => p.type === "similar").length },
         ].map((f) => (
           <button key={f.k} onClick={() => setFT(f.k)}
             className={"px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors " + (fT === f.k ? "bg-indigo-600 text-white" : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50")}>
@@ -1871,7 +2038,7 @@ function App() {
         {view === "stats" && <Stats problems={problems} />}
         {view === "settings" && <Settings onClose={() => go("library")} onConfigSaved={handleConfigSaved} />}
         {view === "detail" && selected && (
-          <Detail problem={selected} onClose={() => go("library")} onUpdate={handleUpdate} onDelete={handleDelete} />
+          <Detail problem={selected} onClose={() => go("library")} onUpdate={handleUpdate} onDelete={handleDelete} onSave={handleNewProblem} />
         )}
       </main>
 
