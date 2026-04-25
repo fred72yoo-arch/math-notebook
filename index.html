@@ -846,7 +846,7 @@ function UploadView({ onSave, onCancel }) {
 }
 
 /* ─── 문제 상세 ─── */
-function Detail({ problem: initP, onClose, onUpdate, onDelete, onSave }) {
+function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
   const [problem, setProblem] = useState(initP);
   const [mode, setMode] = useState("view");
   const [showSol, setShowSol] = useState(false);
@@ -864,8 +864,9 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSave }) {
   const [simError, setSimError] = useState("");
   const [simRevealed, setSimRevealed] = useState({}); // {0: true, 1: true}
   const [simDrawIdx, setSimDrawIdx] = useState(null); // 풀어보기 중인 문제 index
+  const [simSaved, setSimSaved] = useState({}); // {0: true, 1: true}
 
-  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); }, [initP.id]);
+  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); }, [initP.id]);
   useEffect(() => { return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); window.speechSynthesis.cancel(); }; }, []);
 
   const { speaking: speakingErr, speak: speakErr, stop: stopErr } = useVoice();
@@ -939,6 +940,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSave }) {
 
   /* 유사 문제 라이브러리 저장 */
   const handleSaveSimilar = (sp, idx) => {
+    if (simSaved[idx]) return; // 이미 저장됨
     const newProblem = {
       id: uid(),
       type: "similar",
@@ -962,7 +964,8 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSave }) {
       bookmarked: false, mastered: false,
       createdAt: Date.now(), reviewCount: 0, lastReviewed: null,
     };
-    onSave(newProblem);
+    onSaveSilent(newProblem);
+    setSimSaved((p) => ({ ...p, [idx]: true }));
   };
 
   const saveNotes = () => {
@@ -1288,6 +1291,10 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSave }) {
                   className="flex-1 py-2.5 rounded-xl bg-white border-2 border-emerald-300 text-emerald-700 font-semibold text-sm hover:bg-emerald-50 flex items-center justify-center gap-1.5">
                   <Ic n="eye" sz={14} /> 정답 확인
                 </button>
+              ) : simSaved[idx] ? (
+                <div className="flex-1 py-2.5 rounded-xl bg-emerald-100 text-emerald-700 font-semibold text-sm flex items-center justify-center gap-1.5">
+                  ✅ 저장 완료
+                </div>
               ) : (
                 <button onClick={() => handleSaveSimilar(sp, idx)}
                   className="flex-1 py-2.5 rounded-xl bg-white border-2 border-indigo-300 text-indigo-700 font-semibold text-sm hover:bg-indigo-50 flex items-center justify-center gap-1.5">
@@ -1840,6 +1847,14 @@ function App() {
     setView("detail");
   };
 
+  /* 유사 문제 저장 (화면 전환 없이) */
+  const handleSaveSilent = async (p) => {
+    if (dbRef.current) {
+      try { await dbRef.current.collection("problems").doc(p.id).set(p); } catch (e) { console.error("Save error:", e); }
+    }
+    setProblems((prev) => [p, ...prev]);
+  };
+
   const handleUpdate = async (u) => {
     if (dbRef.current) {
       try { await dbRef.current.collection("problems").doc(u.id).set(u); } catch (e) { console.error("Update error:", e); }
@@ -2038,7 +2053,7 @@ function App() {
         {view === "stats" && <Stats problems={problems} />}
         {view === "settings" && <Settings onClose={() => go("library")} onConfigSaved={handleConfigSaved} />}
         {view === "detail" && selected && (
-          <Detail problem={selected} onClose={() => go("library")} onUpdate={handleUpdate} onDelete={handleDelete} onSave={handleNewProblem} />
+          <Detail problem={selected} onClose={() => go("library")} onUpdate={handleUpdate} onDelete={handleDelete} onSaveSilent={handleSaveSilent} />
         )}
       </main>
 
