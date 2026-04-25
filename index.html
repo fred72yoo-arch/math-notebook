@@ -81,6 +81,26 @@ function Ic({ n, sz = 20, cls = "" }) {
 /* ─── 유틸 ─── */
 const uid = () => "p_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
 
+/* ─── finalAnswer 단축 (v3 추가): 긴 계산 체인 → 간결한 "질문 = 답" ─── */
+function shortenFinalAnswer(text) {
+  if (!text) return text;
+  // 이미 짧으면 그대로
+  if (text.length <= 30) return text;
+  // "=" 개수 확인: 2개 이상이면 계산 체인일 가능성
+  const eqParts = text.split('=');
+  if (eqParts.length <= 2) return text;
+  // 마지막 값 (최종 답)
+  const lastValue = eqParts[eqParts.length - 1].trim();
+  // 첫 번째 항 (질문 라벨)
+  const firstLabel = eqParts[0].trim();
+  // 라벨이 짧고 의미 있으면 "라벨 = 답" 형식으로
+  if (firstLabel.length <= 15 && firstLabel.length > 0) {
+    return firstLabel + " = " + lastValue;
+  }
+  // 라벨이 너무 길면 답만 표시
+  return lastValue;
+}
+
 /* ─── 수학 텍스트 → KaTeX 렌더링 (v3 업그레이드: 기호 확장 + 한글 지원) ─── */
 function textToLatex(text) {
   if (!text) return text;
@@ -633,7 +653,7 @@ function StepByStep({ steps, errorStep, onReanalyze, reanalyzing, finalAnswer })
                 <span className="font-bold text-emerald-800">최종 정답</span>
               </div>
               <div className="px-4 py-3 bg-white rounded-lg border border-emerald-200 text-center">
-                <span className="text-lg font-bold text-emerald-700"><MathText text={finalAnswer || steps[steps.length - 1].math} /></span>
+                <span className="text-lg font-bold text-emerald-700"><MathText text={shortenFinalAnswer(finalAnswer) || steps[steps.length - 1].math} /></span>
               </div>
               <div className="mt-2 text-xs italic text-slate-400 text-center">아직 AI 풀이는 오류가 있을 수 있습니다. 따라서 틀린 문제의 정답을 먼저 확인하세요.</div>
             </div>
@@ -1098,7 +1118,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
       unit: sp.unit || problem.unit,
       difficulty: sp.difficulty || problem.difficulty,
       tags: sp.tags || problem.tags || [],
-      problemImg: problem.problemImg,
+      problemImg: null, // 유사 문제는 원본 이미지 저장하지 않음
       solutionImg: null,
       problemText: sp.problemText || "",
       errorStep: null, errorAnalysis: null,
@@ -1182,7 +1202,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
 
       <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
         <div className="flex items-center gap-2 mb-3"><Ic n="file" sz={15} cls="text-indigo-600" /><span className="font-semibold text-slate-800">문제</span></div>
-        <img src={problem.problemImg} alt="문제 이미지" className="w-full rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />
+        {problem.problemImg && <img src={problem.problemImg} alt="문제 이미지" className="w-full rounded-xl border border-slate-200" onError={(e) => { e.target.style.display = 'none'; }} />}
         {problem.problemText && (
           problem.type === "similar" && problem.problemText.includes("[도형 설명]")
             ? <div className="mt-3"><ProblemTextBlock text={problem.problemText} /></div>
@@ -1475,7 +1495,11 @@ function Card({ p, onClick }) {
     <button onClick={onClick} className="w-full bg-white rounded-2xl p-3 shadow-sm border border-slate-200 hover:shadow-md hover:border-indigo-300 transition text-left group">
       <div className="flex gap-3">
         <div className="w-20 h-20 flex-shrink-0 rounded-lg overflow-hidden bg-slate-100 border border-slate-200">
-          <img src={p.problemImg} alt={p.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+          {p.problemImg ? (
+            <img src={p.problemImg} alt={p.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }} />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-3xl bg-gradient-to-br from-purple-50 to-indigo-50">🎲</div>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-1">
