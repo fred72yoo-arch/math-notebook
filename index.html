@@ -394,6 +394,28 @@ async function generateSimilar(problem) {
   return JSON.parse(clean);
 }
 
+/* ─── 텍스트 기반 재분석 (v3 추가: 유사 문제 재분석용) ─── */
+async function resolveTextWithAI(problemText) {
+  const apiKey = localStorage.getItem("anthropic_api_key");
+  if (!apiKey) throw new Error("API 키가 설정되지 않았습니다.");
+
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ apiKey, mode: "resolve_text", problemContext: problemText }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || "재분석 실패 (" + res.status + ")");
+  }
+
+  const data = await res.json();
+  const rawText = data.content.filter((c) => c.type === "text").map((c) => c.text).join("");
+  const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
 /* ─── 데모용 목업 데이터 ─── */
 const MOCK = [
   {
@@ -1032,8 +1054,13 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
   const [simRevealed, setSimRevealed] = useState({}); // {0: true, 1: true}
   const [simDrawIdx, setSimDrawIdx] = useState(null); // 풀어보기 중인 문제 index
   const [simSaved, setSimSaved] = useState({}); // {0: true, 1: true}
+  // 유사 문제 재분석 상태 (v3 추가)
+  const [simReLoading, setSimReLoading] = useState({}); // {0: true}
+  const [simReResult, setSimReResult] = useState({}); // {0: {result}, 1: {result}}
+  const [simReError, setSimReError] = useState({}); // {0: "에러메시지"}
+  const [simReTab, setSimReTab] = useState({}); // {0: "new"}
 
-  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); }, [initP.id]);
+  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); setSimReLoading({}); setSimReResult({}); setSimReError({}); setSimReTab({}); }, [initP.id]);
   useEffect(() => { return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); window.speechSynthesis.cancel(); }; }, []);
 
   const { speaking: speakingErr, speak: speakErr, stop: stopErr } = useVoice();
@@ -1133,6 +1160,40 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
     };
     onSaveSilent(newProblem);
     setSimSaved((p) => ({ ...p, [idx]: true }));
+  };
+
+  /* 유사 문제 재분석 (v3 추가) */
+  const handleSimReanalyze = async (sp, idx) => {
+    if (!sp.problemText) { setSimReError((p) => ({ ...p, [idx]: "문제 텍스트가 없습니다." })); return; }
+    setSimReLoading((p) => ({ ...p, [idx]: true }));
+    setSimReError((p) => ({ ...p, [idx]: "" }));
+    setSimReResult((p) => ({ ...p, [idx]: null }));
+    try {
+      const result = await resolveTextWithAI(sp.problemText);
+      setSimReResult((p) => ({ ...p, [idx]: result }));
+      setSimReTab((p) => ({ ...p, [idx]: "new" }));
+    } catch (e) {
+      setSimReError((p) => ({ ...p, [idx]: "재분석 실패: " + e.message }));
+    }
+    setSimReLoading((p) => ({ ...p, [idx]: false }));
+  };
+
+  /* 유사 문제 새 풀이로 교체 (v3 추가) */
+  const applySimNewResult = (idx) => {
+    const nr = simReResult[idx];
+    if (!nr || !simProblems) return;
+    const updated = [...simProblems];
+    updated[idx] = {
+      ...updated[idx],
+      solutionSteps: nr.solutionSteps || updated[idx].solutionSteps,
+      finalAnswer: nr.finalAnswer || updated[idx].finalAnswer,
+      keyConcepts: nr.keyConcepts || updated[idx].keyConcepts,
+      keyFormulas: nr.keyFormulas || updated[idx].keyFormulas,
+      tip: nr.tip || updated[idx].tip,
+    };
+    setSimProblems(updated);
+    setSimReResult((p) => ({ ...p, [idx]: null }));
+    setSimReError((p) => ({ ...p, [idx]: "" }));
   };
 
   const saveNotes = () => {
@@ -1475,7 +1536,79 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
             {/* 정답/풀이 (접힘) */}
             {simRevealed[idx] && (
               <div className="space-y-2 pt-2 border-t border-slate-200">
-                <StepByStep steps={sp.solutionSteps || []} errorStep={null} finalAnswer={sp.finalAnswer} />
+                <StepByStep steps={sp.solutionSteps || []} errorStep={null} finalAnswer={sp.finalAnswer}
+                  onReanalyze={() => handleSimReanalyze(sp, idx)} reanalyzing={!!simReLoading[idx]} />
+
+                {/* 유사 문제 재분석 에러 */}
+                {simReError[idx] && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm flex items-center justify-between">
+                    <span className="text-red-700">⚠️ {simReError[idx]}</span>
+                    <button onClick={() => setSimReError((p) => ({ ...p, [idx]: "" }))} className="text-xs text-red-500 px-2 py-1 rounded hover:bg-red-100">닫기</button>
+                  </div>
+                )}
+
+                {/* 유사 문제 재분석 결과 비교 UI */}
+                {simReResult[idx] && (() => {
+                  const oldAns = shortenFinalAnswer(sp.finalAnswer || (sp.solutionSteps?.length ? sp.solutionSteps[sp.solutionSteps.length - 1].math : ""));
+                  const newAns = shortenFinalAnswer(simReResult[idx].finalAnswer || "");
+                  const same = oldAns === newAns;
+                  const tab = simReTab[idx] || "new";
+                  const nr = simReResult[idx];
+                  return (
+                    <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border-2 border-blue-200 space-y-3">
+                      <div className="text-sm font-bold text-blue-800">🔄 재분석 결과</div>
+                      {/* 정답 비교 */}
+                      <div className={"p-3 rounded-lg text-sm font-semibold text-center " + (same ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700")}>
+                        {same ? "✅ 기존 정답과 동일합니다" : "⚠️ 기존 정답과 다릅니다"}
+                        {!same && <div className="mt-1 text-xs font-normal">기존: {oldAns} → 새: {newAns}</div>}
+                      </div>
+                      {/* 탭 전환 */}
+                      <div className="flex gap-1 bg-white rounded-lg p-1">
+                        <button onClick={() => setSimReTab((p) => ({ ...p, [idx]: "old" }))}
+                          className={"flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors " + (tab === "old" ? "bg-slate-700 text-white" : "text-slate-600 hover:bg-slate-100")}>
+                          📋 기존 풀이
+                        </button>
+                        <button onClick={() => setSimReTab((p) => ({ ...p, [idx]: "new" }))}
+                          className={"flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors " + (tab === "new" ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100")}>
+                          ✨ 새 풀이
+                        </button>
+                      </div>
+                      {/* 풀이 표시 */}
+                      {tab === "old" ? (
+                        <div className="space-y-2">
+                          {(sp.solutionSteps || []).map((s) => (
+                            <div key={s.num} className="bg-white rounded-lg p-3 border border-slate-200">
+                              <div className="text-xs font-bold text-slate-700 mb-1">{s.num}. {s.title}</div>
+                              <div className="text-sm"><MathText text={s.math} /></div>
+                              <div className="text-xs text-slate-500 mt-1">{s.explain}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {(nr.solutionSteps || []).map((s) => (
+                            <div key={s.num} className="bg-white rounded-lg p-3 border border-indigo-200">
+                              <div className="text-xs font-bold text-indigo-700 mb-1">{s.num}. {s.title}</div>
+                              <div className="text-sm"><MathText text={s.math} /></div>
+                              <div className="text-xs text-slate-500 mt-1">{s.explain}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {/* 교체/유지 버튼 */}
+                      <div className="flex gap-2">
+                        <button onClick={() => applySimNewResult(idx)}
+                          className="flex-1 py-2 rounded-xl bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-700">
+                          ✨ 새 풀이로 교체
+                        </button>
+                        <button onClick={() => { setSimReResult((p) => ({ ...p, [idx]: null })); setSimReError((p) => ({ ...p, [idx]: "" })); }}
+                          className="flex-1 py-2 rounded-xl bg-slate-100 text-slate-700 font-semibold text-sm hover:bg-slate-200">
+                          기존 유지
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>
