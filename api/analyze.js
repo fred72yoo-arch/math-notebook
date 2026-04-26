@@ -27,6 +27,16 @@ module.exports = async function handler(req, res) {
       role: "user",
       content: "아래 원본 문제를 참고하여 비슷한 유형의 문제 2개를 만들어주세요.\n\n" + problemContext,
     }];
+  } else if (mode === "resolve_text") {
+    // 텍스트 기반 재분석 모드 (유사 문제 재분석용)
+    if (!problemContext) return res.status(400).json({ error: { message: "문제 정보가 필요합니다." } });
+
+    systemPrompt = "당신은 중학교·고등학교 수학 교육 전문가입니다.\n주어진 수학 문제를 처음부터 다시 풀어주세요. 이전 풀이와 무관하게 독립적으로 풀이하세요.\nJSON 외의 텍스트(설명, 마크다운 코드블록 등)는 절대 포함하지 마세요.\n\n{\"title\":\"문제 요약 제목\",\"grade\":\"학년(중1/중2/중3/고1/고2/고3)\",\"unit\":\"단원명\",\"difficulty\":\"하 또는 중 또는 상\",\"tags\":[\"태그\"],\"problemText\":\"문제 원문\",\"solutionSteps\":[{\"num\":1,\"title\":\"단계명\",\"math\":\"수식\",\"explain\":\"설명\"}],\"finalAnswer\":\"문제의 최종 질문 = 답\",\"keyConcepts\":[\"개념\"],\"keyFormulas\":[\"공식\"],\"tip\":\"학습 팁\"}\n\n규칙:\n- solutionSteps는 3~6단계로 작성하세요.\n- math 필드에는 수식을 텍스트로 표기하세요.\n- finalAnswer는 반드시 \"질문 = 답\" 형식으로 10단어 이내로 쓰세요. 중간 계산 과정은 절대 포함하지 마세요.\n  올바른 예: \"a+b = -1\", \"x = 3\", \"넓이 = 24\"\n  틀린 예(이렇게 쓰면 안 됨): \"lim_{x→1} ... = -2·2/2 = ... = -1\"";
+
+    messages = [{
+      role: "user",
+      content: "아래 수학 문제를 처음부터 다시 풀어주세요.\n\n" + problemContext,
+    }];
   } else {
     // 기본 모드: 이미지 분석
     if (!imageBase64) return res.status(400).json({ error: { message: "이미지가 필요합니다." } });
