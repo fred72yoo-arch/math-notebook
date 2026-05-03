@@ -417,17 +417,15 @@ async function resolveTextWithAI(problemText) {
 }
 
 /* ─── 정답 힌트 재분석 (v3 추가: 이미지 또는 텍스트 + 정답) ─── */
-async function reanalyzeWithAnswer({ imageBase64, mimeType, problemText, correctAnswer }) {
+async function reanalyzeWithAnswer({ imageBase64, mimeType, problemText, correctAnswer, answerImageBase64 }) {
   const apiKey = localStorage.getItem("anthropic_api_key");
   if (!apiKey) throw new Error("API 키가 설정되지 않았습니다.");
 
-  const body = { apiKey, mode: "resolve_with_answer", correctAnswer };
-  if (imageBase64) {
-    body.imageBase64 = imageBase64;
-    body.mimeType = mimeType;
-  } else if (problemText) {
-    body.problemContext = problemText;
-  }
+  const body = { apiKey, mode: "resolve_with_answer" };
+  if (correctAnswer) body.correctAnswer = correctAnswer;
+  if (answerImageBase64) { body.answerImageBase64 = answerImageBase64; body.answerMimeType = "image/png"; }
+  if (imageBase64) { body.imageBase64 = imageBase64; body.mimeType = mimeType; }
+  else if (problemText) { body.problemContext = problemText; }
 
   const res = await fetch("/api/analyze", {
     method: "POST",
@@ -881,6 +879,135 @@ function DrawCanvas({ onClose }) {
   );
 }
 
+/* ─── 정답 손글씨 캔버스 (v3 추가: Apple Pencil 지원) ─── */
+function AnswerCanvas({ onSubmit, onCancel }) {
+  const canvasRef = useRef(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasContent, setHasContent] = useState(false);
+  const [color, setColor] = useState("#1e293b");
+  const [lineW, setLineW] = useState(3);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    // 캔버스 크기 설정 (고해상도 대응)
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, rect.width, rect.height);
+  }, []);
+
+  const getPos = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const startDraw = (e) => {
+    e.preventDefault();
+    const ctx = canvasRef.current.getContext("2d");
+    const pos = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineW;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const ctx = canvasRef.current.getContext("2d");
+    const pos = getPos(e);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+    setHasContent(true);
+  };
+
+  const endDraw = () => setIsDrawing(false);
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(dpr, dpr);
+    setHasContent(false);
+  };
+
+  const handleSubmit = () => {
+    if (!hasContent) return;
+    const canvas = canvasRef.current;
+    const base64 = canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/, "");
+    onSubmit(base64);
+  };
+
+  const colors = [
+    { c: "#1e293b", n: "검정" }, { c: "#dc2626", n: "빨강" }, { c: "#2563eb", n: "파랑" },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs font-bold text-amber-800 flex items-center gap-2">
+        <span className="text-lg">✏️</span> Apple Pencil 또는 손가락으로 정답을 써주세요
+      </div>
+
+      {/* 캔버스 영역 */}
+      <div className="border-2 border-amber-300 rounded-xl overflow-hidden bg-white" style={{ touchAction: "none" }}>
+        <canvas ref={canvasRef}
+          className="w-full cursor-crosshair"
+          style={{ height: "120px", touchAction: "none" }}
+          onPointerDown={startDraw}
+          onPointerMove={draw}
+          onPointerUp={endDraw}
+          onPointerLeave={endDraw}
+          onPointerCancel={endDraw}
+        />
+      </div>
+
+      {/* 도구 바 */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-1.5">
+          {colors.map((co) => (
+            <button key={co.c} onClick={() => setColor(co.c)} title={co.n}
+              className={"w-6 h-6 rounded-full border-2 transition-transform " + (color === co.c ? "scale-110 border-indigo-500 shadow-md" : "border-slate-300")}
+              style={{ background: co.c }} />
+          ))}
+          <select value={lineW} onChange={(e) => setLineW(Number(e.target.value))}
+            className="text-xs px-1.5 py-1 rounded-lg border border-slate-300 bg-white ml-1">
+            <option value={2}>가늘게</option>
+            <option value={3}>보통</option>
+            <option value={5}>굵게</option>
+          </select>
+          <button onClick={clearCanvas} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-semibold ml-1">
+            지우기
+          </button>
+        </div>
+      </div>
+
+      {/* 액션 버튼 */}
+      <div className="flex gap-2">
+        <button onClick={handleSubmit} disabled={!hasContent}
+          className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+          🎯 이 정답으로 재분석
+        </button>
+        <button onClick={onCancel}
+          className="px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-amber-700 font-semibold text-sm hover:bg-amber-50">
+          취소
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─── 업로드 (v2: 실제 AI 분석 + 이미지 압축) ─── */
 function UploadView({ onSave, onCancel }) {
   const [img, setImg] = useState(null);
@@ -1094,8 +1221,10 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
   const [correctAnswerInput, setCorrectAnswerInput] = useState("");
   const [simShowAnswerInput, setSimShowAnswerInput] = useState({}); // {0: true}
   const [simCorrectAnswerInput, setSimCorrectAnswerInput] = useState({}); // {0: "text"}
+  const [answerInputMode, setAnswerInputMode] = useState("keyboard"); // "keyboard" | "pencil"
+  const [simAnswerInputMode, setSimAnswerInputMode] = useState({}); // {0: "keyboard"}
 
-  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); setSimReLoading({}); setSimReResult({}); setSimReError({}); setSimReTab({}); setShowAnswerInput(false); setCorrectAnswerInput(""); setSimShowAnswerInput({}); setSimCorrectAnswerInput({}); }, [initP.id]);
+  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); setSimReLoading({}); setSimReResult({}); setSimReError({}); setSimReTab({}); setShowAnswerInput(false); setCorrectAnswerInput(""); setSimShowAnswerInput({}); setSimCorrectAnswerInput({}); setAnswerInputMode("keyboard"); setSimAnswerInputMode({}); }, [initP.id]);
   useEffect(() => { return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); window.speechSynthesis.cancel(); }; }, []);
 
   const { speaking: speakingErr, speak: speakErr, stop: stopErr } = useVoice();
@@ -1187,6 +1316,43 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
       setSimReTab((p) => ({ ...p, [idx]: "new" }));
     } catch (e) {
       setSimReError((p) => ({ ...p, [idx]: "정답 재분석 실패: " + e.message }));
+    }
+    setSimReLoading((p) => ({ ...p, [idx]: false }));
+  };
+
+  /* 손글씨 정답 재분석 — 원본 문제 (v3 추가) */
+  const handlePencilAnswerSubmit = async (answerBase64) => {
+    setReanalyzing(true); setReError(""); setReResult(null); setShowAnswerInput(false);
+    try {
+      const params = { answerImageBase64: answerBase64 };
+      if (problem.problemImg) {
+        params.imageBase64 = problem.problemImg.replace(/^data:image\/[a-z]+;base64,/, "");
+        const mimeMatch = problem.problemImg.match(/^data:(image\/[a-z]+);base64,/);
+        params.mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      } else if (problem.problemText) {
+        params.problemText = problem.problemText;
+      }
+      const result = await reanalyzeWithAnswer(params);
+      setReResult(result);
+      setReTab("new");
+    } catch (e) {
+      setReError("손글씨 재분석 실패: " + e.message);
+    }
+    setReanalyzing(false);
+  };
+
+  /* 손글씨 정답 재분석 — 유사 문제 (v3 추가) */
+  const handleSimPencilAnswerSubmit = async (answerBase64, sp, idx) => {
+    setSimReLoading((p) => ({ ...p, [idx]: true }));
+    setSimReError((p) => ({ ...p, [idx]: "" }));
+    setSimReResult((p) => ({ ...p, [idx]: null }));
+    setSimShowAnswerInput((p) => ({ ...p, [idx]: false }));
+    try {
+      const result = await reanalyzeWithAnswer({ problemText: sp.problemText, answerImageBase64: answerBase64 });
+      setSimReResult((p) => ({ ...p, [idx]: result }));
+      setSimReTab((p) => ({ ...p, [idx]: "new" }));
+    } catch (e) {
+      setSimReError((p) => ({ ...p, [idx]: "손글씨 재분석 실패: " + e.message }));
     }
     setSimReLoading((p) => ({ ...p, [idx]: false }));
   };
@@ -1495,7 +1661,7 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
         </div>
       )}
 
-      {/* 정답 힌트 재분석 UI (v3 추가) */}
+      {/* 정답 힌트 재분석 UI (v3 업그레이드: 키보드 + 손글씨) */}
       {mode !== "review" && (
         <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-200 overflow-hidden">
           {!showAnswerInput ? (
@@ -1508,22 +1674,44 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
               <div className="text-sm font-bold text-amber-800 flex items-center gap-2">
                 <span className="text-lg">💡</span> 정답을 입력하면 AI가 정확한 풀이를 만들어줍니다
               </div>
-              <div className="text-xs text-amber-600">예: 3+√2, ②번, x=5, 넓이=36</div>
-              <input type="text" value={correctAnswerInput} onChange={(e) => setCorrectAnswerInput(e.target.value)}
-                placeholder="정답을 입력하세요"
-                className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white"
-                onKeyDown={(e) => { if (e.key === "Enter" && correctAnswerInput.trim()) handleReanalyzeWithAnswer(); }}
-              />
-              <div className="flex gap-2">
-                <button onClick={handleReanalyzeWithAnswer} disabled={!correctAnswerInput.trim() || reanalyzing}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
-                  {reanalyzing ? <><span className="animate-spin">⟳</span> 분석 중...</> : "🎯 정답으로 재분석"}
+
+              {/* 입력 모드 탭 */}
+              <div className="flex gap-1 bg-amber-100 rounded-lg p-1">
+                <button onClick={() => setAnswerInputMode("keyboard")}
+                  className={"flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors " + (answerInputMode === "keyboard" ? "bg-white text-amber-800 shadow-sm" : "text-amber-600")}>
+                  ⌨️ 키보드 입력
                 </button>
-                <button onClick={() => { setShowAnswerInput(false); setCorrectAnswerInput(""); }}
-                  className="px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-amber-700 font-semibold text-sm hover:bg-amber-50">
-                  취소
+                <button onClick={() => setAnswerInputMode("pencil")}
+                  className={"flex-1 py-1.5 rounded-md text-xs font-semibold transition-colors " + (answerInputMode === "pencil" ? "bg-white text-amber-800 shadow-sm" : "text-amber-600")}>
+                  ✏️ 직접 쓰기
                 </button>
               </div>
+
+              {answerInputMode === "keyboard" ? (
+                <>
+                  <div className="text-xs text-amber-600">예: 3+√2, ②번, x=5, 넓이=36</div>
+                  <input type="text" value={correctAnswerInput} onChange={(e) => setCorrectAnswerInput(e.target.value)}
+                    placeholder="정답을 입력하세요"
+                    className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                    onKeyDown={(e) => { if (e.key === "Enter" && correctAnswerInput.trim()) handleReanalyzeWithAnswer(); }}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={handleReanalyzeWithAnswer} disabled={!correctAnswerInput.trim() || reanalyzing}
+                      className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+                      {reanalyzing ? <><span className="animate-spin">⟳</span> 분석 중...</> : "🎯 정답으로 재분석"}
+                    </button>
+                    <button onClick={() => { setShowAnswerInput(false); setCorrectAnswerInput(""); }}
+                      className="px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-amber-700 font-semibold text-sm hover:bg-amber-50">
+                      취소
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <AnswerCanvas
+                  onSubmit={(base64) => handlePencilAnswerSubmit(base64)}
+                  onCancel={() => { setShowAnswerInput(false); setAnswerInputMode("keyboard"); }}
+                />
+              )}
             </div>
           )}
         </div>
@@ -1718,31 +1906,53 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
                   );
                 })()}
 
-                {/* 유사 문제 정답 힌트 재분석 UI (v3 추가) */}
+                {/* 유사 문제 정답 힌트 재분석 UI (v3 업그레이드: 키보드 + 손글씨) */}
                 <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 overflow-hidden">
                   {!simShowAnswerInput[idx] ? (
-                    <button onClick={() => setSimShowAnswerInput((p) => ({ ...p, [idx]: true }))}
+                    <button onClick={() => { setSimShowAnswerInput((p) => ({ ...p, [idx]: true })); setSimAnswerInputMode((p) => ({ ...p, [idx]: "keyboard" })); }}
                       className="w-full px-3 py-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors">
                       <span>💡</span> 정답을 알고 있나요? — 정답으로 다시 풀기
                     </button>
                   ) : (
                     <div className="p-3 space-y-2">
                       <div className="text-xs font-bold text-amber-800">💡 정답을 입력하면 AI가 정확한 풀이를 만들어줍니다</div>
-                      <input type="text" value={simCorrectAnswerInput[idx] || ""} onChange={(e) => setSimCorrectAnswerInput((p) => ({ ...p, [idx]: e.target.value }))}
-                        placeholder="정답을 입력하세요 (예: x=5, ③번)"
-                        className="w-full px-3 py-2 border-2 border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white"
-                        onKeyDown={(e) => { if (e.key === "Enter" && (simCorrectAnswerInput[idx] || "").trim()) handleSimReanalyzeWithAnswer(sp, idx); }}
-                      />
-                      <div className="flex gap-2">
-                        <button onClick={() => handleSimReanalyzeWithAnswer(sp, idx)} disabled={!(simCorrectAnswerInput[idx] || "").trim() || !!simReLoading[idx]}
-                          className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-xs disabled:opacity-50 flex items-center justify-center gap-1">
-                          {simReLoading[idx] ? <><span className="animate-spin">⟳</span> 분석 중...</> : "🎯 정답으로 재분석"}
+
+                      {/* 입력 모드 탭 */}
+                      <div className="flex gap-1 bg-amber-100 rounded-lg p-0.5">
+                        <button onClick={() => setSimAnswerInputMode((p) => ({ ...p, [idx]: "keyboard" }))}
+                          className={"flex-1 py-1 rounded-md text-[11px] font-semibold transition-colors " + ((simAnswerInputMode[idx] || "keyboard") === "keyboard" ? "bg-white text-amber-800 shadow-sm" : "text-amber-600")}>
+                          ⌨️ 키보드
                         </button>
-                        <button onClick={() => { setSimShowAnswerInput((p) => ({ ...p, [idx]: false })); setSimCorrectAnswerInput((p) => ({ ...p, [idx]: "" })); }}
-                          className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-amber-700 font-semibold text-xs">
-                          취소
+                        <button onClick={() => setSimAnswerInputMode((p) => ({ ...p, [idx]: "pencil" }))}
+                          className={"flex-1 py-1 rounded-md text-[11px] font-semibold transition-colors " + (simAnswerInputMode[idx] === "pencil" ? "bg-white text-amber-800 shadow-sm" : "text-amber-600")}>
+                          ✏️ 직접 쓰기
                         </button>
                       </div>
+
+                      {(simAnswerInputMode[idx] || "keyboard") === "keyboard" ? (
+                        <>
+                          <input type="text" value={simCorrectAnswerInput[idx] || ""} onChange={(e) => setSimCorrectAnswerInput((p) => ({ ...p, [idx]: e.target.value }))}
+                            placeholder="정답을 입력하세요 (예: x=5, ③번)"
+                            className="w-full px-3 py-2 border-2 border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                            onKeyDown={(e) => { if (e.key === "Enter" && (simCorrectAnswerInput[idx] || "").trim()) handleSimReanalyzeWithAnswer(sp, idx); }}
+                          />
+                          <div className="flex gap-2">
+                            <button onClick={() => handleSimReanalyzeWithAnswer(sp, idx)} disabled={!(simCorrectAnswerInput[idx] || "").trim() || !!simReLoading[idx]}
+                              className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-xs disabled:opacity-50 flex items-center justify-center gap-1">
+                              {simReLoading[idx] ? <><span className="animate-spin">⟳</span> 분석 중...</> : "🎯 정답으로 재분석"}
+                            </button>
+                            <button onClick={() => { setSimShowAnswerInput((p) => ({ ...p, [idx]: false })); setSimCorrectAnswerInput((p) => ({ ...p, [idx]: "" })); }}
+                              className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-amber-700 font-semibold text-xs">
+                              취소
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <AnswerCanvas
+                          onSubmit={(base64) => handleSimPencilAnswerSubmit(base64, sp, idx)}
+                          onCancel={() => { setSimShowAnswerInput((p) => ({ ...p, [idx]: false })); setSimAnswerInputMode((p) => ({ ...p, [idx]: "keyboard" })); }}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
