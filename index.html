@@ -416,6 +416,36 @@ async function resolveTextWithAI(problemText) {
   return JSON.parse(cleaned);
 }
 
+/* ─── 정답 힌트 재분석 (v3 추가: 이미지 또는 텍스트 + 정답) ─── */
+async function reanalyzeWithAnswer({ imageBase64, mimeType, problemText, correctAnswer }) {
+  const apiKey = localStorage.getItem("anthropic_api_key");
+  if (!apiKey) throw new Error("API 키가 설정되지 않았습니다.");
+
+  const body = { apiKey, mode: "resolve_with_answer", correctAnswer };
+  if (imageBase64) {
+    body.imageBase64 = imageBase64;
+    body.mimeType = mimeType;
+  } else if (problemText) {
+    body.problemContext = problemText;
+  }
+
+  const res = await fetch("/api/analyze", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || "정답 재분석 실패 (" + res.status + ")");
+  }
+
+  const data = await res.json();
+  const rawText = data.content.filter((c) => c.type === "text").map((c) => c.text).join("");
+  const cleaned = rawText.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+  return JSON.parse(cleaned);
+}
+
 /* ─── 데모용 목업 데이터 ─── */
 const MOCK = [
   {
@@ -1059,8 +1089,13 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
   const [simReResult, setSimReResult] = useState({}); // {0: {result}, 1: {result}}
   const [simReError, setSimReError] = useState({}); // {0: "에러메시지"}
   const [simReTab, setSimReTab] = useState({}); // {0: "new"}
+  // 정답 힌트 재분석 상태 (v3 추가)
+  const [showAnswerInput, setShowAnswerInput] = useState(false);
+  const [correctAnswerInput, setCorrectAnswerInput] = useState("");
+  const [simShowAnswerInput, setSimShowAnswerInput] = useState({}); // {0: true}
+  const [simCorrectAnswerInput, setSimCorrectAnswerInput] = useState({}); // {0: "text"}
 
-  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); setSimReLoading({}); setSimReResult({}); setSimReError({}); setSimReTab({}); }, [initP.id]);
+  useEffect(() => { setProblem(initP); setNotes(initP.notes || ""); setMode("view"); setShowSol(false); setSaved(false); setReResult(null); setReError(""); setSimProblems(null); setSimError(""); setSimRevealed({}); setSimDrawIdx(null); setSimSaved({}); setSimReLoading({}); setSimReResult({}); setSimReError({}); setSimReTab({}); setShowAnswerInput(false); setCorrectAnswerInput(""); setSimShowAnswerInput({}); setSimCorrectAnswerInput({}); }, [initP.id]);
   useEffect(() => { return () => { if (savedTimerRef.current) clearTimeout(savedTimerRef.current); window.speechSynthesis.cancel(); }; }, []);
 
   const { speaking: speakingErr, speak: speakErr, stop: stopErr } = useVoice();
@@ -1115,6 +1150,46 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
   const oldAnswer = getAnswer(problem, problem.solutionSteps);
   const newAnswer = reResult ? getAnswer(reResult, reResult.solutionSteps) : "";
   const isSameAnswer = reResult ? oldAnswer === newAnswer : true;
+
+  /* 정답 힌트 재분석 — 원본 문제 (v3 추가) */
+  const handleReanalyzeWithAnswer = async () => {
+    if (!correctAnswerInput.trim()) return;
+    setReanalyzing(true); setReError(""); setReResult(null); setShowAnswerInput(false);
+    try {
+      const params = { correctAnswer: correctAnswerInput.trim() };
+      if (problem.problemImg) {
+        params.imageBase64 = problem.problemImg.replace(/^data:image\/[a-z]+;base64,/, "");
+        const mimeMatch = problem.problemImg.match(/^data:(image\/[a-z]+);base64,/);
+        params.mimeType = mimeMatch ? mimeMatch[1] : "image/jpeg";
+      } else if (problem.problemText) {
+        params.problemText = problem.problemText;
+      }
+      const result = await reanalyzeWithAnswer(params);
+      setReResult(result);
+      setReTab("new");
+    } catch (e) {
+      setReError("정답 재분석 실패: " + e.message);
+    }
+    setReanalyzing(false);
+  };
+
+  /* 정답 힌트 재분석 — 유사 문제 (v3 추가) */
+  const handleSimReanalyzeWithAnswer = async (sp, idx) => {
+    const ans = (simCorrectAnswerInput[idx] || "").trim();
+    if (!ans) return;
+    setSimReLoading((p) => ({ ...p, [idx]: true }));
+    setSimReError((p) => ({ ...p, [idx]: "" }));
+    setSimReResult((p) => ({ ...p, [idx]: null }));
+    setSimShowAnswerInput((p) => ({ ...p, [idx]: false }));
+    try {
+      const result = await reanalyzeWithAnswer({ problemText: sp.problemText, correctAnswer: ans });
+      setSimReResult((p) => ({ ...p, [idx]: result }));
+      setSimReTab((p) => ({ ...p, [idx]: "new" }));
+    } catch (e) {
+      setSimReError((p) => ({ ...p, [idx]: "정답 재분석 실패: " + e.message }));
+    }
+    setSimReLoading((p) => ({ ...p, [idx]: false }));
+  };
 
   /* 유사 문제 생성 */
   const handleGenerateSimilar = async () => {
@@ -1420,6 +1495,39 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
         </div>
       )}
 
+      {/* 정답 힌트 재분석 UI (v3 추가) */}
+      {mode !== "review" && (
+        <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-2xl border-2 border-amber-200 overflow-hidden">
+          {!showAnswerInput ? (
+            <button onClick={() => setShowAnswerInput(true)}
+              className="w-full px-4 py-3 flex items-center justify-center gap-2 text-sm font-semibold text-amber-700 hover:bg-amber-100 transition-colors">
+              <span className="text-lg">💡</span> 정답을 알고 있나요? — 정답으로 다시 풀기
+            </button>
+          ) : (
+            <div className="p-4 space-y-3">
+              <div className="text-sm font-bold text-amber-800 flex items-center gap-2">
+                <span className="text-lg">💡</span> 정답을 입력하면 AI가 정확한 풀이를 만들어줍니다
+              </div>
+              <div className="text-xs text-amber-600">예: 3+√2, ②번, x=5, 넓이=36</div>
+              <input type="text" value={correctAnswerInput} onChange={(e) => setCorrectAnswerInput(e.target.value)}
+                placeholder="정답을 입력하세요"
+                className="w-full px-4 py-3 border-2 border-amber-300 rounded-xl text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                onKeyDown={(e) => { if (e.key === "Enter" && correctAnswerInput.trim()) handleReanalyzeWithAnswer(); }}
+              />
+              <div className="flex gap-2">
+                <button onClick={handleReanalyzeWithAnswer} disabled={!correctAnswerInput.trim() || reanalyzing}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-sm disabled:opacity-50 flex items-center justify-center gap-1.5 active:scale-[0.98] transition-transform">
+                  {reanalyzing ? <><span className="animate-spin">⟳</span> 분석 중...</> : "🎯 정답으로 재분석"}
+                </button>
+                <button onClick={() => { setShowAnswerInput(false); setCorrectAnswerInput(""); }}
+                  className="px-4 py-2.5 rounded-xl bg-white border border-amber-300 text-amber-700 font-semibold text-sm hover:bg-amber-50">
+                  취소
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       {(problem.keyConcepts || []).length > 0 && (
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
           <div className="flex items-center gap-2 mb-2"><Ic n="star" sz={15} cls="text-purple-600" /><span className="font-semibold">핵심 개념</span></div>
@@ -1609,6 +1717,35 @@ function Detail({ problem: initP, onClose, onUpdate, onDelete, onSaveSilent }) {
                     </div>
                   );
                 })()}
+
+                {/* 유사 문제 정답 힌트 재분석 UI (v3 추가) */}
+                <div className="bg-gradient-to-br from-amber-50 to-orange-50 rounded-xl border border-amber-200 overflow-hidden">
+                  {!simShowAnswerInput[idx] ? (
+                    <button onClick={() => setSimShowAnswerInput((p) => ({ ...p, [idx]: true }))}
+                      className="w-full px-3 py-2.5 flex items-center justify-center gap-2 text-xs font-semibold text-amber-700 hover:bg-amber-100 transition-colors">
+                      <span>💡</span> 정답을 알고 있나요? — 정답으로 다시 풀기
+                    </button>
+                  ) : (
+                    <div className="p-3 space-y-2">
+                      <div className="text-xs font-bold text-amber-800">💡 정답을 입력하면 AI가 정확한 풀이를 만들어줍니다</div>
+                      <input type="text" value={simCorrectAnswerInput[idx] || ""} onChange={(e) => setSimCorrectAnswerInput((p) => ({ ...p, [idx]: e.target.value }))}
+                        placeholder="정답을 입력하세요 (예: x=5, ③번)"
+                        className="w-full px-3 py-2 border-2 border-amber-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-400 outline-none bg-white"
+                        onKeyDown={(e) => { if (e.key === "Enter" && (simCorrectAnswerInput[idx] || "").trim()) handleSimReanalyzeWithAnswer(sp, idx); }}
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => handleSimReanalyzeWithAnswer(sp, idx)} disabled={!(simCorrectAnswerInput[idx] || "").trim() || !!simReLoading[idx]}
+                          className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold text-xs disabled:opacity-50 flex items-center justify-center gap-1">
+                          {simReLoading[idx] ? <><span className="animate-spin">⟳</span> 분석 중...</> : "🎯 정답으로 재분석"}
+                        </button>
+                        <button onClick={() => { setSimShowAnswerInput((p) => ({ ...p, [idx]: false })); setSimCorrectAnswerInput((p) => ({ ...p, [idx]: "" })); }}
+                          className="px-3 py-2 rounded-lg bg-white border border-amber-300 text-amber-700 font-semibold text-xs">
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
