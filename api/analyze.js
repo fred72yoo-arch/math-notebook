@@ -10,7 +10,7 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { imageBase64, mimeType, apiKey, mode, problemContext } = req.body;
+  const { imageBase64, mimeType, apiKey, mode, problemContext, correctAnswer } = req.body;
 
   if (!apiKey) return res.status(400).json({ error: { message: "API 키가 필요합니다." } });
 
@@ -37,6 +37,30 @@ module.exports = async function handler(req, res) {
       role: "user",
       content: "아래 수학 문제를 처음부터 다시 풀어주세요.\n\n" + problemContext,
     }];
+  } else if (mode === "resolve_with_answer") {
+    // 정답 힌트 재분석 모드 (이미지 또는 텍스트 + 정답)
+    if (!correctAnswer) return res.status(400).json({ error: { message: "정답 정보가 필요합니다." } });
+
+    systemPrompt = "당신은 중학교·고등학교 수학 교육 전문가입니다.\n학생이 정답을 알려주었습니다. 이 정답이 올바르다고 가정하고, 정답에 도달하는 완벽한 풀이 과정을 작성하세요.\nJSON 외의 텍스트(설명, 마크다운 코드블록 등)는 절대 포함하지 마세요.\n\n{\"title\":\"문제 요약 제목\",\"grade\":\"학년(중1/중2/중3/고1/고2/고3)\",\"unit\":\"단원명\",\"difficulty\":\"하 또는 중 또는 상\",\"tags\":[\"태그\"],\"problemText\":\"문제 원문\",\"solutionSteps\":[{\"num\":1,\"title\":\"단계명\",\"math\":\"수식\",\"explain\":\"설명\"}],\"finalAnswer\":\"문제의 최종 질문 = 답\",\"keyConcepts\":[\"개념\"],\"keyFormulas\":[\"공식\"],\"tip\":\"학습 팁\"}\n\n규칙:\n- 반드시 주어진 정답에 도달하는 풀이를 작성하세요.\n- solutionSteps는 3~6단계로, 각 단계를 명확하게 작성하세요.\n- 이전에 AI가 틀렸을 수 있으므로, 문제를 아주 주의 깊게 다시 읽고 풀어주세요.\n- 특히 수식의 괄호, 부호, 연산 순서를 정확히 파악하세요.\n- finalAnswer는 반드시 \"질문 = 답\" 형식으로 10단어 이내로 쓰세요.\n- tip에는 이 문제에서 실수하기 쉬운 포인트를 적어주세요.";
+
+    if (imageBase64) {
+      // 이미지 기반 + 정답 힌트
+      messages = [{
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: mimeType || "image/jpeg", data: imageBase64 } },
+          { type: "text", text: "이 수학 문제의 정답은 「" + correctAnswer + "」입니다. 이 정답이 나오도록 처음부터 정확하게 풀이해주세요." },
+        ],
+      }];
+    } else if (problemContext) {
+      // 텍스트 기반 + 정답 힌트
+      messages = [{
+        role: "user",
+        content: "아래 수학 문제의 정답은 「" + correctAnswer + "」입니다. 이 정답이 나오도록 처음부터 정확하게 풀이해주세요.\n\n" + problemContext,
+      }];
+    } else {
+      return res.status(400).json({ error: { message: "이미지 또는 문제 텍스트가 필요합니다." } });
+    }
   } else {
     // 기본 모드: 이미지 분석
     if (!imageBase64) return res.status(400).json({ error: { message: "이미지가 필요합니다." } });
